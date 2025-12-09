@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UserNotifications
+import UIKit
 
 @MainActor
 final class AppState: ObservableObject {

@@ -16,7 +16,7 @@ enum ShowType: String, Codable, CaseIterable, Identifiable {
         case .movie:   return "Movie"
         case .series:  return "TV Show"
         case .episode: return "Episode"
-        case .other:   return return "Other"
+        case .other:   return "Other"
         }
     }
 }
