@@ -157,6 +157,40 @@ final class AppState: ObservableObject {
             }
         }
     }
+
+    func scheduleLocalNotification(for show: Show) {
+        guard let airDate = show.nextAirDate else {
+            print("No next air date found for show \(show.title). Skipping notification scheduling.")
+            return
+        }
+
+        // Schedule the notification for 9 AM on the air date
+        let calendar = Calendar.current
+        var triggerDateComponents = calendar.dateComponents([.year, .month, .day], from: airDate)
+        triggerDateComponents.hour = 9
+        triggerDateComponents.minute = 0
+
+        let content = UNMutableNotificationContent()
+        content.title = "\(show.title) airs today"
+        content.body = "Don't miss the new episode or release."
+        content.sound = .default
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: triggerDateComponents, repeats: false)
+        let request = UNNotificationRequest(identifier: show.id, content: content, trigger: trigger)
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Failed to schedule notification for \(show.title): \(error.localizedDescription)")
+            } else {
+                print("Notification scheduled for \(show.title) on \(airDate)")
+            }
+        }
+    }
+
+    func cancelLocalNotification(for show: Show) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [show.id])
+        print("Cancelled notification for \(show.title)")
+    }
     
     // MARK: - Persistence
     private func saveTrackedToDefaults() {
