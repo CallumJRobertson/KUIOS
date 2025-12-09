@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UserNotifications
 
 @MainActor
 final class AppState: ObservableObject {
@@ -11,8 +12,15 @@ final class AppState: ObservableObject {
     @Published var isSearching: Bool = false
     @Published var lastSearchError: String?
     
+    // MARK: - Navigation Control
+    @Published var selectedTab: Int = 0 // ✅ NEW: Global tab selection state (default 0: My Update)
+    
     // MARK: - Tracked state
     @Published var trackedShows: [Show] = []
+    
+    // MARK: - New Feature: Updates Tab
+    @Published var trackedUpdates: [Show] = []
+    @Published var isLoadingUpdates: Bool = false
     
     // MARK: - Dependencies
     private let client: TMDBClient
@@ -24,7 +32,7 @@ final class AppState: ObservableObject {
         loadTrackedFromDefaults()
     }
     
-    // MARK: - Search
+    // MARK: - Search (unchanged)
     func performSearch() async {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
@@ -53,6 +61,47 @@ final class AppState: ObservableObject {
         lastSearchError = nil
     }
     
+    // MARK: - Updates Tab Logic
+    func loadUpdates() async {
+        guard !trackedShows.isEmpty else { return }
+        
+        isLoadingUpdates = true
+        
+        defer { isLoadingUpdates = false }
+        
+        // Use a serial task group to check each series concurrently
+        await withTaskGroup(of: Show?.self) { group in
+            for show in trackedShows where show.type == .series {
+                group.addTask {
+                    do {
+                        let detail = try await self.client.fetchNextSeasonDetails(for: show.id)
+                        
+                        if detail.status == "Returning Series", let nextEp = detail.nextEpisodeToAir {
+                            var updatedShow = show
+                            
+                            let airDate = nextEp.airDate ?? "TBD"
+                            updatedShow.aiSummary = "Next Episode: S\(nextEp.seasonNumber ?? 0)E\(nextEp.episodeNumber ?? 0) on \(airDate)"
+                            return updatedShow
+                        }
+                        
+                    } catch {
+                        print("Failed to load details for \(show.title): \(error)")
+                    }
+                    return nil
+                }
+            }
+            
+            var newUpdates: [Show] = []
+            for await updatedShow in group {
+                if let show = updatedShow {
+                    newUpdates.append(show)
+                }
+            }
+            
+            self.trackedUpdates = newUpdates.sorted { $0.title < $1.title }
+        }
+    }
+    
     // MARK: - Tracked shows
     
     var trackedMovies: [Show] {
@@ -76,7 +125,7 @@ final class AppState: ObservableObject {
         trackedShows.contains { $0.id == show.id }
     }
     
-    // NEW: Update a tracked show with new data (like AI status)
+    // Update a tracked show with new data (including notification status)
     func updateTrackedShow(_ updatedShow: Show) {
         if let index = trackedShows.firstIndex(where: { $0.id == updatedShow.id }) {
             trackedShows[index] = updatedShow
@@ -84,7 +133,7 @@ final class AppState: ObservableObject {
         }
     }
     
-    // NEW: Get cached show data if available
+    // Get cached show data if available
     func getCachedShow(id: String) -> Show? {
         return trackedShows.first { $0.id == id }
     }
@@ -92,6 +141,20 @@ final class AppState: ObservableObject {
     func clearTracked() {
         trackedShows.removeAll()
         saveTrackedToDefaults()
+    }
+    
+    // MARK: - Push Notification Setup
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if granted {
+                print("Notification permission granted. Registering for APNs.")
+                DispatchQueue.main.async {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            } else if let error = error {
+                print("Notification permission error: \(error.localizedDescription)")
+            }
+        }
     }
     
     // MARK: - Persistence

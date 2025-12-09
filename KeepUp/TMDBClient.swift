@@ -72,7 +72,8 @@ struct TMDBClient {
     func fetchTrailer(for id: String, type: ShowType) async throws -> String? {
         let endpoint = type == .movie ? "/movie/\(id)/videos" : "/tv/\(id)/videos"
         
-        let request = try buildRequest(endpoint: endpoint, params: [:])
+        // ✅ FIX: Use explicit empty dictionary type
+        let request = try buildRequest(endpoint: endpoint, params: [String: String]())
         
         let (data, _) = try await session.data(for: request)
         let response = try decoder.decode(TMDBVideosResponse.self, from: data)
@@ -89,7 +90,8 @@ struct TMDBClient {
     func fetchWatchProviders(for id: String, type: ShowType) async throws -> [WatchProvider] {
         let endpoint = type == .movie ? "/movie/\(id)/watch/providers" : "/tv/\(id)/watch/providers"
         
-        let request = try buildRequest(endpoint: endpoint, params: [:])
+        // ✅ FIX: Use explicit empty dictionary type
+        let request = try buildRequest(endpoint: endpoint, params: [String: String]())
         
         let (data, _) = try await session.data(for: request)
         let response = try decoder.decode(TMDBWatchProvidersResponse.self, from: data)
@@ -103,6 +105,17 @@ struct TMDBClient {
         }
         
         return providers
+    }
+
+    // ✅ ADDED: Function for the 'My Update' Tab
+    func fetchNextSeasonDetails(for id: String) async throws -> TMDBTVDetail {
+        let endpoint = "/tv/\(id)"
+        // ✅ FIX: Use explicit empty dictionary type
+        let request = try buildRequest(endpoint: endpoint, params: [String: String]())
+        
+        let (data, _) = try await session.data(for: request)
+        let detail = try decoder.decode(TMDBTVDetail.self, from: data)
+        return detail
     }
     
     // MARK: - Helpers

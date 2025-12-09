@@ -16,7 +16,7 @@ enum ShowType: String, Codable, CaseIterable, Identifiable {
         case .movie:   return "Movie"
         case .series:  return "TV Show"
         case .episode: return "Episode"
-        case .other:   return "Other"
+        case .other:   return return "Other"
         }
     }
 }
@@ -47,6 +47,25 @@ struct Show: Identifiable, Codable, Equatable {
     var aiStatus: String?
     var aiSummary: String?
     var aiSources: [Source]?
+    
+    var isCached: Bool?
+    var isNotificationEnabled: Bool?
+    
+    // ✅ FIX: Computed property to parse the next air date for scheduling
+    var nextAirDate: Date? {
+        guard let summary = aiSummary else { return nil }
+        
+        // Find the date string (e.g., "YYYY-MM-DD") after the "on " prefix
+        let prefix = "on "
+        guard let range = summary.range(of: prefix, options: .backwards) else { return nil }
+        
+        let dateString = String(summary[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        // Returns the Date object (typically at 00:00:00 UTC)
+        return formatter.date(from: dateString)
+    }
     
     var hasDetails: Bool {
         plot != nil || actors != nil || director != nil || genre != nil || rating != nil
@@ -131,15 +150,30 @@ struct TMDBTVDetail: Decodable {
     let backdropPath: String?
     let credits: TMDBCredits?
     let createdBy: [TMDBCreator]?
+    let status: String?
+    let nextEpisodeToAir: TMDBEpisode?
     
     enum CodingKeys: String, CodingKey {
-        case id, name, overview, genres, credits
+        case id, name, overview, genres, credits, status
         case firstAirDate = "first_air_date"
         case episodeRunTime = "episode_run_time"
         case voteAverage = "vote_average"
         case posterPath = "poster_path"
         case backdropPath = "backdrop_path"
         case createdBy = "created_by"
+        case nextEpisodeToAir = "next_episode_to_air"
+    }
+}
+
+struct TMDBEpisode: Decodable {
+    let airDate: String?
+    let episodeNumber: Int?
+    let seasonNumber: Int?
+    
+    enum CodingKeys: String, CodingKey {
+        case airDate = "air_date"
+        case episodeNumber = "episode_number"
+        case seasonNumber = "season_number"
     }
 }
 

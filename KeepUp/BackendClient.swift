@@ -4,28 +4,25 @@ import Foundation
 struct BackendResponse: Codable {
     let status: String
     let summary: String
-    let sources: [Source]? // This will now correctly use the Source from Models.swift
+    let sources: [Source]?
+    let cached: Bool?
 }
-
-// REMOVE THE STRUCT BELOW (lines 10-13 in your file)
-// struct Source: Codable {
-//     let title: String?
-//     let url: String?
-// }
 
 // 2. The Messenger
 struct BackendClient {
     // 👇 YOUR RENDER URL
     static let baseURL = "https://keepup-backend-5ilq.onrender.com/api/show-status"
     
-    static func fetchStatus(for showTitle: String, isTV: Bool) async throws -> BackendResponse {
+    // ✅ MODIFIED: Added currentDate parameter
+    static func fetchStatus(for showTitle: String, isTV: Bool, currentDate: String) async throws -> BackendResponse {
         guard let url = URL(string: baseURL) else { throw URLError(.badURL) }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body: [String: Any] = ["showName": showTitle, "isTV": isTV]
+        // ✅ MODIFIED: Pass date in the body
+        let body: [String: Any] = ["showName": showTitle, "isTV": isTV, "currentDate": currentDate]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
         let (data, response) = try await URLSession.shared.data(for: request)

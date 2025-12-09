@@ -4,14 +4,20 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     
-    @AppStorage("useDarkMode") private var useDarkMode: Bool = false
+    // Changed: matches the key in MyApp
+    @AppStorage("appTheme") private var appTheme: String = "system"
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     
     var body: some View {
         NavigationView {
             Form {
                 Section("Appearance") {
-                    Toggle("Dark mode", isOn: $useDarkMode)
+                    Picker("Theme", selection: $appTheme) {
+                        Text("System").tag("system")
+                        Text("Light").tag("light")
+                        Text("Dark").tag("dark")
+                    }
+                    .pickerStyle(.segmented)
                 }
                 
                 Section("Tracking") {
@@ -33,7 +39,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text("0.1.0")
+                        Text("0.1.1")
                             .foregroundStyle(.secondary)
                     }
                     HStack {
