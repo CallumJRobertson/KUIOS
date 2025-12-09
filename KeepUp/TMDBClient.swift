@@ -6,6 +6,15 @@ struct TMDBClient {
     private let baseURL = "https://api.themoviedb.org/3"
     private let imageBaseURL = "https://image.tmdb.org/t/p"
     
+    // 1. ROBUST SESSION CONFIGURATION
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 300
+        return URLSession(configuration: config)
+    }()
+    
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
         return d
@@ -24,14 +33,13 @@ struct TMDBClient {
             endpoint = "/search/multi"
         }
         
-        guard let url = buildURL(endpoint: endpoint, params: [
+        // 2. USE URLREQUEST WITH HEADERS
+        let request = try buildRequest(endpoint: endpoint, params: [
             "query": query,
             "include_adult": "false"
-        ]) else {
-            throw TMDBError.invalidURL
-        }
+        ])
         
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await session.data(for: request)
         let response = try decoder.decode(TMDBSearchResponse.self, from: data)
         
         return response.results.compactMap { result in
@@ -44,13 +52,11 @@ struct TMDBClient {
     func fetchDetails(for id: String, type: ShowType) async throws -> Show {
         let endpoint = type == .movie ? "/movie/\(id)" : "/tv/\(id)"
         
-        guard let url = buildURL(endpoint: endpoint, params: [
+        let request = try buildRequest(endpoint: endpoint, params: [
             "append_to_response": "credits,videos,watch/providers"
-        ]) else {
-            throw TMDBError.invalidURL
-        }
+        ])
         
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await session.data(for: request)
         
         if type == .movie {
             let detail = try decoder.decode(TMDBMovieDetail.self, from: data)
@@ -66,14 +72,11 @@ struct TMDBClient {
     func fetchTrailer(for id: String, type: ShowType) async throws -> String? {
         let endpoint = type == .movie ? "/movie/\(id)/videos" : "/tv/\(id)/videos"
         
-        guard let url = buildURL(endpoint: endpoint, params: [:]) else {
-            throw TMDBError.invalidURL
-        }
+        let request = try buildRequest(endpoint: endpoint, params: [:])
         
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await session.data(for: request)
         let response = try decoder.decode(TMDBVideosResponse.self, from: data)
         
-        // Find official trailer on YouTube
         return response.results.first { video in
             video.site == "YouTube" &&
             video.type == "Trailer" &&
@@ -86,11 +89,9 @@ struct TMDBClient {
     func fetchWatchProviders(for id: String, type: ShowType) async throws -> [WatchProvider] {
         let endpoint = type == .movie ? "/movie/\(id)/watch/providers" : "/tv/\(id)/watch/providers"
         
-        guard let url = buildURL(endpoint: endpoint, params: [:]) else {
-            throw TMDBError.invalidURL
-        }
+        let request = try buildRequest(endpoint: endpoint, params: [:])
         
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await session.data(for: request)
         let response = try decoder.decode(TMDBWatchProvidersResponse.self, from: data)
         
         var providers: [WatchProvider] = []
@@ -106,7 +107,8 @@ struct TMDBClient {
     
     // MARK: - Helpers
     
-    private func buildURL(endpoint: String, params: [String: String]) -> URL? {
+    // 3. UPDATED BUILDER TO RETURN URLREQUEST
+    private func buildRequest(endpoint: String, params: [String: String]) throws -> URLRequest {
         var components = URLComponents(string: baseURL + endpoint)
         var queryItems = [URLQueryItem(name: "api_key", value: apiKey)]
         
@@ -115,7 +117,18 @@ struct TMDBClient {
         }
         
         components?.queryItems = queryItems
-        return components?.url
+        
+        guard let url = components?.url else {
+            throw TMDBError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        // 4. EXPLICIT HEADERS PREVENT -1017 ERRORS
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        return request
     }
     
     private func posterURL(path: String?) -> URL? {

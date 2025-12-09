@@ -2,15 +2,16 @@ import Foundation
 
 // 1. Define what the Server sends back
 struct BackendResponse: Codable {
-    let status: String   // <--- NEW FIELD
+    let status: String
     let summary: String
-    let sources: [Source]?
+    let sources: [Source]? // This will now correctly use the Source from Models.swift
 }
 
-struct Source: Codable {
-    let title: String?
-    let url: String?
-}
+// REMOVE THE STRUCT BELOW (lines 10-13 in your file)
+// struct Source: Codable {
+//     let title: String?
+//     let url: String?
+// }
 
 // 2. The Messenger
 struct BackendClient {

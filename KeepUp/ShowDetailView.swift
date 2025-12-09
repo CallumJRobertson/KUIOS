@@ -19,68 +19,64 @@ struct ShowDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // --- HERO HEADER WITH TRAILER BUTTON ---
-                ZStack(alignment: .bottomLeading) {
-                    // Backdrop image
+                // --- HERO HEADER ---
+                // We use a GeometryReader-like approach by calculating width relative to screen
+                // to keep aspect ratio consistent (approx 16:9)
+                ZStack(alignment: .topTrailing) {
+                    // 1. Backdrop Image
                     if let url = detailedShow.backdropURL ?? detailedShow.posterURL {
                         AsyncImage(url: url) { image in
                             image.resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(height: 350)
+                                .scaledToFill()
+                                .frame(height: UIScreen.main.bounds.width * 0.6) // Dynamic height (approx 16:9)
                                 .clipped()
                         } placeholder: {
-                            Rectangle().fill(Color.gray.opacity(0.2)).frame(height: 350)
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: UIScreen.main.bounds.width * 0.6)
                         }
+                    } else {
+                         Rectangle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(height: UIScreen.main.bounds.width * 0.6)
                     }
                     
-                    // Dark Gradient
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.9)],
-                        startPoint: .center,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 350)
-                    
-                    // Trailer button (top right)
+                    // 2. Trailer Button (Overlay)
                     if let trailerKey = detailedShow.trailerKey {
-                        VStack {
-                            HStack {
-                                Spacer()
-                                Button {
-                                    showTrailer = true
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "play.fill")
-                                        Text("Trailer")
-                                            .font(.caption)
-                                            .fontWeight(.semibold)
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Capsule())
-                                }
-                                .padding()
+                        Button {
+                            showTrailer = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "play.fill")
+                                Text("Trailer")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
                             }
-                            Spacer()
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
                         }
-                        .frame(height: 350)
+                        .padding()
                         .sheet(isPresented: $showTrailer) {
                             TrailerPlayerView(youtubeKey: trailerKey)
                         }
                     }
+                }
+                
+                // --- MAIN CONTENT ---
+                VStack(alignment: .leading, spacing: 16) {
                     
-                    // Title & Badge
+                    // 1. TITLE & METADATA (Moved out of Header to fit safely)
                     VStack(alignment: .leading, spacing: 8) {
                         if let status = detailedShow.aiStatus {
                             StatusBadge(status: status)
                         }
                         
                         Text(detailedShow.title)
-                            .font(.largeTitle)
+                            .font(.title) // Scaled down slightly from largeTitle for better fit
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .shadow(radius: 4)
+                            .fixedSize(horizontal: false, vertical: true) // Prevents truncation
                         
                         HStack(spacing: 4) {
                             Text(detailedShow.year)
@@ -92,18 +88,16 @@ struct ShowDetailView: View {
                                 HStack(spacing: 2) {
                                     Image(systemName: "star.fill")
                                         .font(.caption)
+                                        .foregroundColor(.yellow)
                                     Text(rating)
                                 }
                             }
                         }
                         .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundStyle(.secondary)
                     }
-                    .padding()
-                }
-                
-                VStack(spacing: 20) {
-                    // --- TRACKING BUTTON ---
+                    
+                    // 2. TRACKING BUTTON
                     Button {
                         appState.toggleTracking(for: detailedShow)
                     } label: {
@@ -119,7 +113,7 @@ struct ShowDetailView: View {
                         .cornerRadius(12)
                     }
                     
-                    // --- WHERE TO WATCH ---
+                    // 3. WHERE TO WATCH
                     if let providers = detailedShow.watchProviders, !providers.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
@@ -161,7 +155,7 @@ struct ShowDetailView: View {
                         .cornerRadius(16)
                     }
                     
-                    // --- OVERVIEW ---
+                    // 4. OVERVIEW
                     if let plot = detailedShow.plot {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Overview")
@@ -170,10 +164,9 @@ struct ShowDetailView: View {
                                 .font(.body)
                                 .foregroundStyle(.secondary)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     
-                    // --- DETAILS GRID ---
+                    // 5. DETAILS GRID
                     if detailedShow.hasDetails {
                         VStack(spacing: 12) {
                             if let genre = detailedShow.genre {
@@ -194,7 +187,7 @@ struct ShowDetailView: View {
                         .cornerRadius(16)
                     }
                     
-                    // --- AI INTELLIGENCE ---
+                    // 6. AI INTELLIGENCE
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Image(systemName: "sparkles")
@@ -256,57 +249,36 @@ struct ShowDetailView: View {
                 .padding()
             }
         }
-        .edgesIgnoringSafeArea(.top)
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadAllData()
         }
     }
     
+    // MARK: - Data Loading
+    
     func loadAllData() async {
-        // Check if we have cached data first
         if let cached = appState.getCachedShow(id: show.id) {
             detailedShow = cached
         }
-        
-        // Load details if needed
-        if !detailedShow.hasDetails {
-            await loadDetails()
-        }
-        
-        // Load trailer if needed
-        if detailedShow.trailerKey == nil {
-            await loadTrailer()
-        }
-        
-        // Load watch providers if needed
-        if detailedShow.watchProviders == nil {
-            await loadWatchProviders()
-        }
-        
-        // Load AI status if needed
-        if detailedShow.aiSummary == nil {
-            await loadStatus()
-        }
+        if !detailedShow.hasDetails { await loadDetails() }
+        if detailedShow.trailerKey == nil { await loadTrailer() }
+        if detailedShow.watchProviders == nil { await loadWatchProviders() }
+        if detailedShow.aiSummary == nil { await loadStatus() }
     }
     
     func loadDetails() async {
         isLoadingDetails = true
         defer { isLoadingDetails = false }
-        
         do {
             let client = TMDBClient(apiKey: Secrets.tmdbAPIKey)
             let detailed = try await client.fetchDetails(for: show.id, type: show.type)
-            
-            // Preserve any existing AI data
             var updated = detailed
             updated.aiStatus = detailedShow.aiStatus
             updated.aiSummary = detailedShow.aiSummary
             updated.aiSources = detailedShow.aiSources
-            
             detailedShow = updated
-        } catch {
-            print("Failed to load details: \(error)")
-        }
+        } catch { print("Failed to load details: \(error)") }
     }
     
     func loadTrailer() async {
@@ -314,9 +286,7 @@ struct ShowDetailView: View {
             let client = TMDBClient(apiKey: Secrets.tmdbAPIKey)
             let trailerKey = try await client.fetchTrailer(for: show.id, type: show.type)
             detailedShow.trailerKey = trailerKey
-        } catch {
-            print("Failed to load trailer: \(error)")
-        }
+        } catch { print("Failed to load trailer: \(error)") }
     }
     
     func loadWatchProviders() async {
@@ -324,33 +294,25 @@ struct ShowDetailView: View {
             let client = TMDBClient(apiKey: Secrets.tmdbAPIKey)
             let providers = try await client.fetchWatchProviders(for: show.id, type: show.type)
             detailedShow.watchProviders = providers
-        } catch {
-            print("Failed to load watch providers: \(error)")
-        }
+        } catch { print("Failed to load watch providers: \(error)") }
     }
     
     func loadStatus() async {
         guard detailedShow.aiSummary == nil else { return }
         isLoadingAI = true
         errorMessage = nil
-        
         do {
             let isTV = (detailedShow.type == .series || detailedShow.type == .episode)
             let response = try await BackendClient.fetchStatus(for: detailedShow.title, isTV: isTV)
-            
             withAnimation {
                 detailedShow.aiStatus = response.status
                 detailedShow.aiSummary = response.summary
                 detailedShow.aiSources = response.sources
-                
-                // Update cached version if tracked
                 if appState.isTracked(detailedShow) {
                     appState.updateTrackedShow(detailedShow)
                 }
             }
-        } catch {
-            self.errorMessage = error.localizedDescription
-        }
+        } catch { self.errorMessage = error.localizedDescription }
         isLoadingAI = false
     }
 }
@@ -384,7 +346,6 @@ struct TrailerPlayerView: View {
         NavigationView {
             ZStack {
                 Color.black.ignoresSafeArea()
-                
                 if let url = URL(string: "https://www.youtube.com/embed/\(youtubeKey)") {
                     WebView(url: url)
                 }
@@ -392,29 +353,24 @@ struct TrailerPlayerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(.white)
+                    Button("Done") { dismiss() }.foregroundColor(.white)
                 }
             }
         }
     }
 }
 
-// MARK: - WebView for YouTube
+// MARK: - WebView
 
 import WebKit
 
 struct WebView: UIViewRepresentable {
     let url: URL
-    
     func makeUIView(context: Context) -> WKWebView {
         let webView = WKWebView()
         webView.backgroundColor = .black
         return webView
     }
-    
     func updateUIView(_ webView: WKWebView, context: Context) {
         webView.load(URLRequest(url: url))
     }
