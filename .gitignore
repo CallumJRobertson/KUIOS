@@ -1,0 +1,17 @@
+# Xcode
+.DS_Store
+*/build/
+*.derivedData
+*.xcuserstate
+*.opendiff
+*.symbolicated
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+
+# User Settings (The most important part)
+*.xcuserdata
