@@ -23,29 +23,40 @@ struct TMDBClient {
     // MARK: - Search
     
     func search(query: String, type: ShowType) async throws -> [Show] {
-        let endpoint: String
-        switch type {
-        case .movie:
-            endpoint = "/search/movie"
-        case .series:
-            endpoint = "/search/tv"
-        default:
-            endpoint = "/search/multi"
+            let endpoint: String
+            switch type {
+            case .movie:
+                endpoint = "/search/movie"
+            case .series:
+                endpoint = "/search/tv"
+            default:
+                endpoint = "/search/multi"
+            }
+            
+            let request = try buildRequest(endpoint: endpoint, params: [
+                "query": query,
+                "include_adult": "false"
+            ])
+            
+            // 🔍 DEBUGGING: Print what we are searching for
+            print("🔎 Searching for: \(query)")
+            
+            let (data, response) = try await session.data(for: request)
+            
+            // 🔍 DEBUGGING: Check the server response code
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📡 API Response Code: \(httpResponse.statusCode)")
+            }
+
+            let searchResponse = try decoder.decode(TMDBSearchResponse.self, from: data)
+            
+            // 🔍 DEBUGGING: Check how many results we found
+            print("✅ Found \(searchResponse.results.count) results")
+            
+            return searchResponse.results.compactMap { result in
+                convertSearchResultToShow(result, requestedType: type)
+            }
         }
-        
-        // 2. USE URLREQUEST WITH HEADERS
-        let request = try buildRequest(endpoint: endpoint, params: [
-            "query": query,
-            "include_adult": "false"
-        ])
-        
-        let (data, _) = try await session.data(for: request)
-        let response = try decoder.decode(TMDBSearchResponse.self, from: data)
-        
-        return response.results.compactMap { result in
-            convertSearchResultToShow(result, requestedType: type)
-        }
-    }
     
     // MARK: - Fetch Details
     

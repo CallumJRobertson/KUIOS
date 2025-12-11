@@ -31,8 +31,8 @@ struct YourUpdateView: View {
                                         .foregroundStyle(.white)
                                         .padding(.horizontal, 24)
                                     
-                                    // Math to perfectly center the cards
-                                    let sidePadding = (geo.size.width - cardWidth) / 2
+                                    // ✅ FIX: Use max(0, ...) to prevent negative numbers (NaN crash)
+                                    let sidePadding = max(0, (geo.size.width - cardWidth) / 2)
                                     
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         HStack(spacing: cardSpacing) {
@@ -113,7 +113,7 @@ struct SlideshowCard: View {
             // 3. Text Info
             VStack(alignment: .leading, spacing: 6) {
                 
-                // ✅ NEW: Smart Date Badge (Tomorrow, Thursday, or 17 Dec)
+                // Smart Date Badge
                 if let date = show.nextAirDate {
                     Text(formatRelativeDate(date).uppercased())
                         .font(.system(size: 11, weight: .bold))
@@ -170,23 +170,20 @@ struct SlideshowCard: View {
         return text
     }
     
-    // ✅ CHANGED: Logic to avoid "Next Wednesday" confusion
     func formatRelativeDate(_ date: Date) -> String {
         let calendar = Calendar.current
         
         if calendar.isDateInToday(date) { return "Tonight" }
         if calendar.isDateInTomorrow(date) { return "Tomorrow" }
         
-        // Only show "Day Name" (e.g. Wednesday) if it is LESS than 6 days away
         if let days = calendar.dateComponents([.day], from: Date(), to: date).day, days < 6 {
             let formatter = DateFormatter()
             formatter.dateFormat = "EEEE"
             return formatter.string(from: date)
         }
         
-        // Otherwise use clear date (e.g. "17 Dec")
         let formatter = DateFormatter()
-        formatter.dateFormat = "d MMM" 
+        formatter.dateFormat = "d MMM"
         return formatter.string(from: date)
     }
 }
