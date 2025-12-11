@@ -186,9 +186,33 @@ final class AppState: ObservableObject {
         saveTrackedToCloud()
     }
     
-    // MARK: - Other methods (currently stubs – you can re-paste your original implementations)
-    func performSearch() async { /* ... */ }
-    func clearSearchResults() { /* ... */ }
+    // MARK: - Search & notifications
+    func performSearch() async {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !query.isEmpty else {
+            clearSearchResults()
+            return
+        }
+
+        isSearching = true
+        lastSearchError = nil
+
+        do {
+            searchResults = try await client.search(query: query, type: searchType)
+        } catch {
+            searchResults = []
+            lastSearchError = (error as? TMDBError)?.errorDescription ?? error.localizedDescription
+        }
+
+        isSearching = false
+    }
+
+    func clearSearchResults() {
+        searchResults = []
+        lastSearchError = nil
+        isSearching = false
+    }
     func requestNotificationPermission() { /* ... */ }
     func scheduleLocalNotification(for show: Show) { /* ... */ }
     func cancelLocalNotification(for show: Show) { /* ... */ }
