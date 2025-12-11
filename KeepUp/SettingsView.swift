@@ -2,11 +2,11 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
+    // ✅ NEW: Access AuthManager to handle sign out
+    @EnvironmentObject var authManager: AuthManager
     
     @AppStorage("appTheme") private var appTheme: String = "system"
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
-    
-    // New Settings
     @AppStorage("includeMoviesInUpdates") private var includeMoviesInUpdates: Bool = false
     @AppStorage("autoClearSearch") private var autoClearSearch: Bool = true
     
@@ -23,6 +23,35 @@ struct SettingsView: View {
                 
                 ScrollView {
                     VStack(spacing: 24) {
+                        
+                        // MARK: - SECTION: ACCOUNT (NEW)
+                        SettingsSection(title: "Account") {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text("Signed in as")
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.6))
+                                    Text(authManager.userEmail ?? "User")
+                                        .foregroundStyle(.white)
+                                        .fontWeight(.medium)
+                                }
+                                Spacer()
+                            }
+                            
+                            Divider().background(.white.opacity(0.2))
+                            
+                            Button(role: .destructive) {
+                                authManager.signOut()
+                            } label: {
+                                HStack {
+                                    Text("Sign Out")
+                                    Spacer()
+                                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                                }
+                                .foregroundStyle(.red)
+                                .fontWeight(.semibold)
+                            }
+                        }
                         
                         // MARK: - SECTION: APPEARANCE
                         SettingsSection(title: "Appearance") {
@@ -42,17 +71,14 @@ struct SettingsView: View {
                         
                         // MARK: - SECTION: LIBRARY & TRACKING
                         SettingsSection(title: "Library & Tracking") {
-                            // NEW: Toggle for Movie Updates
                             ToggleRow(title: "Include Movies in Updates", isOn: $includeMoviesInUpdates)
                             
                             Divider().background(.white.opacity(0.2))
                             
-                            // Existing: Haptics
                             ToggleRow(title: "Haptic Feedback", isOn: $hapticsEnabled)
                             
                             Divider().background(.white.opacity(0.2))
                             
-                            // Existing: Clear Library
                             Button(role: .destructive) {
                                 appState.clearTracked()
                             } label: {
@@ -67,12 +93,10 @@ struct SettingsView: View {
                         
                         // MARK: - SECTION: SEARCH EXPERIENCE
                         SettingsSection(title: "Search Experience") {
-                            // NEW: Auto Clear Search
                             ToggleRow(title: "Auto-clear Search Field", isOn: $autoClearSearch)
                             
                             Divider().background(.white.opacity(0.2))
                             
-                            // Existing: Clear Search History
                             Button(role: .destructive) {
                                 appState.clearSearchResults()
                             } label: {
@@ -106,8 +130,7 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Reusable Settings Components (Defined for consistency)
-
+// ... (Keep the Reusable Components like SettingsSection, ToggleRow, InfoRow at the bottom unchanged)
 struct SettingsSection<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
