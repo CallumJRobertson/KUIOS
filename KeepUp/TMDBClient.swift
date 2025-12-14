@@ -23,40 +23,133 @@ struct TMDBClient {
     // MARK: - Search
     
     func search(query: String, type: ShowType) async throws -> [Show] {
-            let endpoint: String
-            switch type {
-            case .movie:
-                endpoint = "/search/movie"
-            case .series:
-                endpoint = "/search/tv"
-            default:
-                endpoint = "/search/multi"
-            }
-            
-            let request = try buildRequest(endpoint: endpoint, params: [
-                "query": query,
-                "include_adult": "false"
-            ])
-            
-            // 🔍 DEBUGGING: Print what we are searching for
-            print("🔎 Searching for: \(query)")
-            
-            let (data, response) = try await session.data(for: request)
-            
-            // 🔍 DEBUGGING: Check the server response code
-            if let httpResponse = response as? HTTPURLResponse {
-                print("📡 API Response Code: \(httpResponse.statusCode)")
-            }
+        let endpoint: String
+        switch type {
+        case .movie:
+            endpoint = "/search/movie"
+        case .series:
+            endpoint = "/search/tv"
+        default:
+            endpoint = "/search/multi"
+        }
 
+        let request = try buildRequest(endpoint: endpoint, params: [
+            "query": query,
+            "include_adult": "false"
+        ])
+
+        // Debug
+        print("🔎 Searching for: \(query)")
+
+        let (data, response) = try await session.data(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse {
+            print("📡 API Response Code: \(httpResponse.statusCode)")
+            if !(200...299).contains(httpResponse.statusCode) {
+                // Try to decode TMDB-style error payload (status_message)
+                if let apiError = try? decoder.decode(TMDBAPIErrorResponse.self, from: data) {
+                    throw TMDBError.apiError(apiError.statusMessage)
+                }
+                let body = String(data: data, encoding: .utf8) ?? "<non-text body>"
+                let snippet = body.count > 500 ? String(body.prefix(500)) + "…" : body
+                throw TMDBError.apiError("Server returned \(httpResponse.statusCode): \(snippet)")
+            }
+        }
+
+        // Decode expected search response
+        do {
             let searchResponse = try decoder.decode(TMDBSearchResponse.self, from: data)
-            
-            // 🔍 DEBUGGING: Check how many results we found
             print("✅ Found \(searchResponse.results.count) results")
-            
             return searchResponse.results.compactMap { result in
                 convertSearchResultToShow(result, requestedType: type)
             }
+        } catch {
+            // If TMDB returned a structured error object, decode and surface it
+            if let apiError = try? decoder.decode(TMDBAPIErrorResponse.self, from: data) {
+                throw TMDBError.apiError(apiError.statusMessage)
+            }
+
+            // Fallback: some endpoints or proxies may return a raw array of results — try that
+            if let rawArray = try? decoder.decode([TMDBSearchResult].self, from: data) {
+                print("✅ Fallback: parsed raw results array (\(rawArray.count) entries)")
+                return rawArray.compactMap { result in
+                    convertSearchResultToShow(result, requestedType: type)
+                }
+            }
+
+            // Extra fallback: parse JSON and look for a "results" key that may be an array
+            if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+               let resultsAny = json["results"] {
+                if let resultsData = try? JSONSerialization.data(withJSONObject: resultsAny, options: []) {
+                    if let parsed = try? decoder.decode([TMDBSearchResult].self, from: resultsData) {
+                        print("✅ Fallback: parsed 'results' key with \(parsed.count) entries")
+                        return parsed.compactMap { convertSearchResultToShow($0, requestedType: type) }
+                    }
+                }
+
+                // Manual, lenient mapping fallback: build `Show` from dictionaries
+                if let resultsArray = resultsAny as? [[String: Any]] {
+                    var manualShows: [Show] = []
+                    for item in resultsArray {
+                        // extract id (Int or String)
+                        let idValue: String
+                        if let idInt = item["id"] as? Int {
+                            idValue = String(idInt)
+                        } else if let idStr = item["id"] as? String {
+                            idValue = idStr
+                        } else {
+                            continue
+                        }
+
+                        let title = (item["title"] as? String) ?? (item["name"] as? String) ?? "Untitled"
+                        let release = (item["release_date"] as? String) ?? (item["first_air_date"] as? String) ?? ""
+                        let posterPath = item["poster_path"] as? String
+                        let backdropPath = item["backdrop_path"] as? String
+                        let mediaType = item["media_type"] as? String
+
+                        let showType: ShowType
+                        if let m = mediaType {
+                            showType = m == "movie" ? .movie : .series
+                        } else {
+                            showType = type
+                        }
+
+                        let show = Show(
+                            id: idValue,
+                            title: title,
+                            year: release.isEmpty ? "N/A" : String(release.prefix(4)),
+                            type: showType,
+                            posterURL: posterURL(path: posterPath),
+                            backdropURL: backdropURL(path: backdropPath)
+                        )
+
+                        manualShows.append(show)
+                    }
+
+                    if !manualShows.isEmpty {
+                        print("✅ Manual fallback parsed \(manualShows.count) shows")
+                        return manualShows
+                    }
+                }
+            }
+
+            let body = String(data: data, encoding: .utf8) ?? "<non-text body>"
+            print("❌ Failed to decode TMDB search response: \(error)\nBody: \(body)")
+            // Surface a helpful API error message so the UI can show why parsing failed
+            // Map common causes to actionable messages
+            let lower = body.lowercased()
+            if lower.contains("invalid api key") || lower.contains("api key") && lower.contains("invalid") {
+                throw TMDBError.apiError("Invalid TMDB API key. Check Secrets.swift and ensure your API key is valid.")
+            }
+            if body.contains("<html") || body.contains("<!doctype html") {
+                throw TMDBError.apiError("Unexpected HTML response from server (possible proxy or network issue). See logs for body snippet.")
+            }
+
+            // Default: short helpful snippet
+            let snippet = body.count > 300 ? String(body.prefix(300)) + "…" : body
+            throw TMDBError.apiError("Unexpected response from TMDB: \(snippet)")
         }
+    }
     
     // MARK: - Fetch Details
     
@@ -245,5 +338,15 @@ struct TMDBClient {
     private func extractYear(from dateString: String) -> String {
         if dateString.isEmpty { return "N/A" }
         return String(dateString.prefix(4))
+    }
+}
+
+// Small helper to parse TMDB error responses
+private struct TMDBAPIErrorResponse: Decodable {
+    let statusMessage: String
+    let statusCode: Int?
+    enum CodingKeys: String, CodingKey {
+        case statusMessage = "status_message"
+        case statusCode = "status_code"
     }
 }

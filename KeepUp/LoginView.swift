@@ -4,6 +4,12 @@ import GoogleSignInSwift
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
     
+    // ✅ NEW: State for email/password input
+    @State private var email = ""
+    @State private var password = ""
+    @State private var errorMessage = ""
+    @State private var isLoading = false
+    
     var body: some View {
         ZStack {
             // Background
@@ -15,37 +21,148 @@ struct LoginView: View {
             )
             .ignoresSafeArea()
             
-            VStack(spacing: 30) {
-                
-                Image(systemName: "sparkles.tv")
-                    .font(.system(size: 80))
-                    .foregroundStyle(.cyan)
-                    .padding(.bottom, 20)
-                
-                Text("Welcome to KeepUp")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
-                
-                Text("Securely save your tracking list to the cloud using your SSO provider.")
-                    .font(.headline)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .multilineTextAlignment(.center)
-                
-                VStack(spacing: 16) {
-
-                    // MARK: - Sign in with Google
-                    GoogleSignInButton(
-                        action: {
-                            Task { await authManager.signInWithGoogle() }
+            ScrollView {
+                VStack(spacing: 30) {
+                    
+                    Spacer().frame(height: 40)
+                    
+                    Image(systemName: "sparkles.tv")
+                        .font(.system(size: 80))
+                        .foregroundStyle(.cyan)
+                        .padding(.bottom, 10)
+                    
+                    Text("Welcome to KeepUp")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.white)
+                    
+                    Text("Securely save your tracking list to the cloud.")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    // MARK: - Email & Password Section
+                    VStack(spacing: 16) {
+                        if !errorMessage.isEmpty {
+                            Text(errorMessage)
+                                .foregroundStyle(.red)
+                                .font(.caption)
+                                .multilineTextAlignment(.center)
                         }
-                    )
-                    .tint(.white)
-                    .frame(height: 50)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                        
+                        TextField("Email", text: $email)
+                            .textFieldStyle(.plain)
+                            .padding()
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                            )
+                            .foregroundStyle(.white)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.emailAddress)
+                        
+                        SecureField("Password", text: $password)
+                            .textFieldStyle(.plain)
+                            .padding()
+                            .background(Color.white.opacity(0.1))
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                            )
+                            .foregroundStyle(.white)
+                        
+                        if isLoading {
+                            ProgressView()
+                                .tint(.cyan)
+                        } else {
+                            HStack(spacing: 16) {
+                                Button {
+                                    handleAction(isSignUp: true)
+                                } label: {
+                                    Text("Sign Up")
+                                        .fontWeight(.bold)
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(Color.white.opacity(0.1))
+                                        .foregroundColor(.white)
+                                        .cornerRadius(10)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(Color.cyan, lineWidth: 1)
+                                        )
+                                }
+                                
+                                Button {
+                                    handleAction(isSignUp: false)
+                                } label: {
+                                    Text("Log In")
+                                        .fontWeight(.bold)
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
+                                        .background(Color.cyan)
+                                        .foregroundColor(.black)
+                                        .cornerRadius(10)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 40)
+                    
+                    // MARK: - Divider
+                    HStack {
+                        Rectangle().frame(height: 1).foregroundStyle(.white.opacity(0.3))
+                        Text("OR").font(.caption).foregroundStyle(.white.opacity(0.7))
+                        Rectangle().frame(height: 1).foregroundStyle(.white.opacity(0.3))
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.vertical, 10)
+                    
+                    // MARK: - Google Sign In
+                    VStack(spacing: 16) {
+                        GoogleSignInButton(
+                            scheme: .light,
+                            style: .wide,
+                            action: {
+                                Task { await authManager.signInWithGoogle() }
+                            }
+                        )
+                        .frame(height: 50)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .padding(.horizontal, 40)
+                    
+                    Spacer()
                 }
-                .padding(.horizontal, 40)
             }
+            .scrollDismissesKeyboard(.immediately)
+        }
+    }
+    
+    // Helper function to handle auth calls
+    func handleAction(isSignUp: Bool) {
+        guard !email.isEmpty, !password.isEmpty else {
+            errorMessage = "Please fill in all fields."
+            return
+        }
+        
+        isLoading = true
+        errorMessage = ""
+        
+        Task {
+            do {
+                if isSignUp {
+                    try await authManager.signUp(email: email, pass: password)
+                } else {
+                    try await authManager.signIn(email: email, pass: password)
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isLoading = false
         }
     }
 }

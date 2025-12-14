@@ -3,17 +3,30 @@ import SwiftUI
 struct TrackedListView: View {
     @EnvironmentObject var appState: AppState
     @State private var filter: ShowType? = nil // nil = All
+    @State private var librarySearchText: String = "" // New: search within library
     
-    // ✅ CHANGED: Increased spacing between columns for a bigger feel
+    // ✅ FIX: Adaptive columns (min 160px) to fill screen width
     let columns = [
-        GridItem(.flexible(), spacing: 20),
-        GridItem(.flexible(), spacing: 20)
+        GridItem(.adaptive(minimum: 160), spacing: 16)
     ]
     
     var displayedShows: [Show] {
         let all = appState.trackedShows.sorted { $0.title < $1.title }
-        guard let filter = filter else { return all }
-        return all.filter { $0.type == filter }
+        // Apply type filter first
+        let typeFiltered: [Show]
+        if let filter = filter {
+            typeFiltered = all.filter { $0.type == filter }
+        } else {
+            typeFiltered = all
+        }
+        // Then apply library search text if provided
+        let query = librarySearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return typeFiltered }
+        return typeFiltered.filter {
+            $0.title.localizedCaseInsensitiveContains(query) ||
+            ($0.aiSummary?.localizedCaseInsensitiveContains(query) ?? false) ||
+            $0.year.localizedCaseInsensitiveContains(query)
+        }
     }
     
     var body: some View {
@@ -27,7 +40,7 @@ struct TrackedListView: View {
                 )
                 .ignoresSafeArea()
                 
-                VStack(spacing: 0) { // Removed initial vertical padding from VStack
+                VStack(spacing: 0) {
                     // MARK: - Filter Chips
                     HStack(spacing: 12) {
                         FilterChip(title: "All", isSelected: filter == nil) { filter = nil }
@@ -50,15 +63,14 @@ struct TrackedListView: View {
                         Spacer()
                     } else {
                         ScrollView {
-                            // ✅ CHANGED: Increased vertical spacing
-                            LazyVGrid(columns: columns, spacing: 24) {
+                            LazyVGrid(columns: columns, spacing: 20) {
                                 ForEach(displayedShows) { show in
                                     NavigationLink(destination: ShowDetailView(show: show)) {
                                         LibraryGridCard(show: show)
                                     }
                                 }
                             }
-                            .padding(.horizontal) // Aligns with chips above
+                            .padding(.horizontal)
                             .padding(.bottom, 80)
                         }
                     }
@@ -66,6 +78,10 @@ struct TrackedListView: View {
             }
             .navigationTitle("Library")
             .toolbarColorScheme(.dark, for: .navigationBar)
+            // Enable native searchable UI in the navigation bar for library
+            .searchable(text: $librarySearchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search your library")
+            // Improve keyboard dismissal behavior
+            .onChange(of: librarySearchText) { _ in }
         }
     }
 }
@@ -76,12 +92,9 @@ struct LibraryGridCard: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Poster with Overlay
+            // ✅ FIX: Use flexible poster to fill the grid cell
             ZStack(alignment: .topTrailing) {
-                PosterView(url: show.posterURL)
-                    .aspectRatio(2/3, contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .shadow(radius: 5)
+                PosterView(url: show.posterURL, flexible: true)
                 
                 // Status Badge (if available)
                 if let status = show.aiStatus {
@@ -96,16 +109,19 @@ struct LibraryGridCard: View {
             }
             
             // Minimal Info
-            Text(show.title)
-                // ✅ CHANGED: Larger font for bigger look
-                .font(.headline) 
-                .fontWeight(.bold)
-                .foregroundStyle(.white)
-                .lineLimit(1)
-            
-            Text(show.year)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.6))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(show.title)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
+                    .lineLimit(2) // ✅ FIX: Allow 2 lines for long titles
+                    .multilineTextAlignment(.leading)
+                    .frame(height: 50, alignment: .top) // ✅ FIX: Fixed height prevents jumping
+                
+                Text(show.year)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.6))
+            }
         }
     }
     

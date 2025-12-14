@@ -43,10 +43,18 @@ struct MyApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
+                // ✅ NEW: Gate access on BOTH authentication and email verification
                 if authManager.userIsAuthenticated {
-                    RootView()
-                        .environmentObject(appState)
+                    if authManager.isEmailVerified {
+                        // Fully signed-in & verified → main app
+                        RootView()
+                            .environmentObject(appState)
+                    } else {
+                        // Signed in, but not verified → verification screen
+                        VerificationView()
+                    }
                 } else {
+                    // Not signed in → login screen
                     LoginView()
                 }
             }

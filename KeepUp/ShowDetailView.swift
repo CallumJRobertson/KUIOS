@@ -9,6 +9,8 @@ struct ShowDetailView: View {
     @State private var isLoadingDetails = false
     @State private var isLoadingAI = false
     @State private var errorMessage: String?
+    @State private var providersVisible: Bool = false
+    @State private var trackScale: CGFloat = 1.0
     
     init(show: Show) {
         self.show = show
@@ -140,9 +142,19 @@ struct ShowDetailView: View {
                             .foregroundStyle(.white.opacity(0.7))
                         }
                         
-                        // 2. TRACKING BUTTON
+                        // 2. TRACKING BUTTON (haptic + subtle pop)
                         Button {
-                            appState.toggleTracking(for: detailedShow)
+                            let gen = UIImpactFeedbackGenerator(style: .medium)
+                            gen.impactOccurred()
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
+                                trackScale = 0.94
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                                appState.toggleTracking(for: detailedShow)
+                                withAnimation(.interpolatingSpring(stiffness: 300, damping: 20)) {
+                                    trackScale = 1.0
+                                }
+                            }
                         } label: {
                             HStack {
                                 Image(systemName: appState.isTracked(detailedShow) ? "checkmark" : "plus")
@@ -154,6 +166,7 @@ struct ShowDetailView: View {
                             .background(appState.isTracked(detailedShow) ? Color.white.opacity(0.15) : Color.cyan)
                             .foregroundColor(appState.isTracked(detailedShow) ? .white : .black)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .scaleEffect(trackScale)
                         }
                         
                         // 3. AI INTELLIGENCE (Glass Section)

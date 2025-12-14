@@ -5,7 +5,8 @@ struct SearchShowsView: View {
     @State private var localSearchText = ""
     @State private var selectedType: ShowType = .series
     @FocusState private var isFocused: Bool
-    
+    @State private var isWaitingForResults = false
+
     var body: some View {
         ZStack {
             // Global Deep Background
@@ -23,15 +24,16 @@ struct SearchShowsView: View {
                         Image(systemName: "magnifyingglass")
                             .foregroundStyle(.gray)
                         
+                        // ✅ SMOOTH: Auto-search field
                         TextField("Find movies & TV...", text: $localSearchText)
                             .foregroundStyle(.white)
                             .focused($isFocused)
-                            .submitLabel(.search)
-                            .onSubmit { runSearch() }
+                            .autocorrectionDisabled()
                         
                         if !localSearchText.isEmpty {
                             Button {
                                 localSearchText = ""
+                                appState.clearSearchResults() // Instant clear
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(.gray)
@@ -56,17 +58,12 @@ struct SearchShowsView: View {
                             .clipShape(Circle())
                             .foregroundStyle(.cyan)
                     }
-                    // ✅ FIXED: Updated to iOS 17 syntax (2 parameters)
-                    .onChange(of: selectedType) { _, newValue in
-                        appState.searchType = newValue
-                        if !appState.searchText.isEmpty { runSearch() }
-                    }
                 }
                 .padding()
-                .background(Color(red: 0.05, green: 0.05, blue: 0.1)) // Header background
+                .background(Color(red: 0.05, green: 0.05, blue: 0.1))
                 
                 // MARK: - Results Area
-                if appState.isSearching {
+                if isWaitingForResults || appState.isSearching {
                     Spacer()
                     ProgressView()
                         .tint(.cyan)
@@ -94,29 +91,57 @@ struct SearchShowsView: View {
                                 NavigationLink(destination: ShowDetailView(show: show)) {
                                     SearchGlassCard(show: show, isTracked: appState.isTracked(show))
                                 }
-                                .buttonStyle(PlainButtonStyle())
+                                .buttonStyle(BouncyButtonStyle())
+                                .animation(.spring(response: 0.35, dampingFraction: 0.7), value: appState.searchResults.count)
                             }
                         }
                         .padding()
                         .padding(.bottom, 80)
                     }
+                    .scrollDismissesKeyboard(.immediately) // ✅ KEYBOARD: Dismiss on scroll
                 }
             }
         }
         .navigationTitle("Search")
-        .navigationBarHidden(true)
-        .onAppear {
-            localSearchText = appState.searchText
+        .navigationBarTitleDisplayMode(.inline)
+        // ✅ DEBOUNCE: Trigger search automatically after 500ms of inactivity
+        .task(id: localSearchText) {
+            if localSearchText.count > 2 {
+                // show waiting UI while debounce timer runs
+                isWaitingForResults = true
+                appState.lastSearchError = nil
+                do {
+                    try await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
+                    appState.searchText = localSearchText
+                    appState.searchType = selectedType
+                    await appState.performSearch()
+                } catch {
+                    // cancellation during debounce - don't treat as error
+                }
+                isWaitingForResults = false
+            } else if localSearchText.isEmpty {
+                isWaitingForResults = false
+                appState.clearSearchResults()
+            }
         }
-    }
-    
-    private func runSearch() {
-        appState.searchText = localSearchText
-        appState.searchType = selectedType
-        isFocused = false
-        Task { await appState.performSearch() }
-    }
-}
+        .onChange(of: localSearchText) { newValue in
+            if !newValue.isEmpty { appState.lastSearchError = nil }
+        }
+        // Also trigger if type changes
+        .onChange(of: selectedType) { _ in
+            appState.searchType = selectedType
+            if !localSearchText.isEmpty {
+                Task { await appState.performSearch() }
+            }
+        }
+        // Auto-focus the search field so keyboard appears when the view opens
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                isFocused = true
+            }
+        }
+     }
+ }
 
 // MARK: - Glass Result Card
 struct SearchGlassCard: View {
@@ -125,13 +150,11 @@ struct SearchGlassCard: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            // Poster
             PosterView(url: show.posterURL)
                 .frame(width: 70, height: 105)
                 .clipped()
                 .cornerRadius(8)
             
-            // Info
             VStack(alignment: .leading, spacing: 6) {
                 Text(show.title)
                     .font(.headline)
@@ -149,7 +172,6 @@ struct SearchGlassCard: View {
                 
                 Spacer()
                 
-                // Tracked Status
                 if isTracked {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
@@ -160,9 +182,7 @@ struct SearchGlassCard: View {
                     .foregroundStyle(.cyan)
                 }
             }
-            
             Spacer()
-            
             Image(systemName: "chevron.right")
                 .foregroundStyle(.white.opacity(0.3))
         }

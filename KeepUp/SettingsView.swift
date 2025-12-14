@@ -2,13 +2,15 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
-    // ✅ NEW: Access AuthManager to handle sign out
     @EnvironmentObject var authManager: AuthManager
     
     @AppStorage("appTheme") private var appTheme: String = "system"
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
     @AppStorage("includeMoviesInUpdates") private var includeMoviesInUpdates: Bool = false
     @AppStorage("autoClearSearch") private var autoClearSearch: Bool = true
+    
+    // Bug Report State
+    @State private var showBugSheet = false
     
     var body: some View {
         NavigationStack {
@@ -24,7 +26,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         
-                        // MARK: - SECTION: ACCOUNT (NEW)
+                        // MARK: - SECTION: ACCOUNT
                         SettingsSection(title: "Account") {
                             HStack {
                                 VStack(alignment: .leading) {
@@ -53,6 +55,26 @@ struct SettingsView: View {
                             }
                         }
                         
+                        // MARK: - SECTION: SUPPORT (NEW)
+                        SettingsSection(title: "Support") {
+                            Button {
+                                showBugSheet = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "ant.fill")
+                                        .foregroundStyle(.yellow)
+                                    Text("Report a Bug")
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundStyle(.white.opacity(0.3))
+                                }
+                            }
+                        }
+                        .sheet(isPresented: $showBugSheet) {
+                            BugReportView()
+                        }
+                        
                         // MARK: - SECTION: APPEARANCE
                         SettingsSection(title: "Appearance") {
                             HStack {
@@ -72,13 +94,9 @@ struct SettingsView: View {
                         // MARK: - SECTION: LIBRARY & TRACKING
                         SettingsSection(title: "Library & Tracking") {
                             ToggleRow(title: "Include Movies in Updates", isOn: $includeMoviesInUpdates)
-                            
                             Divider().background(.white.opacity(0.2))
-                            
                             ToggleRow(title: "Haptic Feedback", isOn: $hapticsEnabled)
-                            
                             Divider().background(.white.opacity(0.2))
-                            
                             Button(role: .destructive) {
                                 appState.clearTracked()
                             } label: {
@@ -94,9 +112,7 @@ struct SettingsView: View {
                         // MARK: - SECTION: SEARCH EXPERIENCE
                         SettingsSection(title: "Search Experience") {
                             ToggleRow(title: "Auto-clear Search Field", isOn: $autoClearSearch)
-                            
                             Divider().background(.white.opacity(0.2))
-                            
                             Button(role: .destructive) {
                                 appState.clearSearchResults()
                             } label: {
@@ -106,6 +122,27 @@ struct SettingsView: View {
                                     Image(systemName: "xmark.circle")
                                 }
                                 .foregroundStyle(.red)
+                            }
+                        }
+                        
+                        // MARK: - SECTION: UPDATES
+                        SettingsSection(title: "Updates") {
+                            // Configure the recent releases window (in days)
+                            HStack {
+                                Text("Recent release window")
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                // Use the same AppStorage key as YourUpdateView
+                                Stepper("\(Int(UserDefaults.standard.integer(forKey: "recentWindowDays"))) days", value: Binding(
+                                    get: {
+                                        let v = UserDefaults.standard.integer(forKey: "recentWindowDays")
+                                        return v == 0 ? 7 : v
+                                    },
+                                    set: { newVal in
+                                        UserDefaults.standard.set(newVal, forKey: "recentWindowDays")
+                                    }
+                                ), in: 1...30)
+                                .labelsHidden()
                             }
                         }
                         
@@ -130,7 +167,74 @@ struct SettingsView: View {
     }
 }
 
-// ... (Keep the Reusable Components like SettingsSection, ToggleRow, InfoRow at the bottom unchanged)
+// MARK: - Bug Report Sheet
+struct BugReportView: View {
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var appState: AppState
+    
+    @State private var title = ""
+    @State private var description = ""
+    @State private var isSubmitting = false
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("What's broken?") {
+                    TextField("Short summary (e.g. Search crashed)", text: $title)
+                }
+                
+                Section("Details") {
+                    TextEditor(text: $description)
+                        .frame(height: 150)
+                        .overlay(
+                            Text("Describe what happened...")
+                                .foregroundStyle(.gray.opacity(0.5))
+                                .padding(.top, 8)
+                                .padding(.leading, 4)
+                                .opacity(description.isEmpty ? 1 : 0),
+                            alignment: .topLeading
+                        )
+                }
+                
+                Section {
+                    Button {
+                        submit()
+                    } label: {
+                        if isSubmitting {
+                            ProgressView()
+                        } else {
+                            Text("Submit Report")
+                                .fontWeight(.bold)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .disabled(title.isEmpty || description.isEmpty || isSubmitting)
+                    .listRowBackground(Color.cyan)
+                    .foregroundStyle(.white)
+                }
+            }
+            .navigationTitle("Report a Bug")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+    
+    func submit() {
+        isSubmitting = true
+        Task {
+            // Simulate network delay and save
+            await appState.reportBug(title: title, description: description)
+            isSubmitting = false
+            dismiss()
+        }
+    }
+}
+
+// ... (Keep existing SettingsSection, ToggleRow, InfoRow structs here)
 struct SettingsSection<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content

@@ -22,27 +22,20 @@ struct RootView: View {
                 }
                 .tag(0)
             
-            // Renamed from "Discover" to "Search" for clarity
-            NavigationView {
-                SearchShowsView()
-            }
-            .tabItem {
-                Label("Search", systemImage: "magnifyingglass")
-            }
-            .tag(1)
+            // Removed the dedicated "Search" tab — search is now available from the Updates toolbar.
             
             // Renamed from "Tracked" to "Library"
             TrackedListView()
                 .tabItem {
                     Label("Library", systemImage: "square.grid.2x2")
                 }
-                .tag(2)
+                .tag(1)
             
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
-                .tag(3)
+                .tag(2)
         }
         .tint(.cyan) // Modern accent color
     }

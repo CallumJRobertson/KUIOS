@@ -9,12 +9,11 @@ import GoogleSignIn
 @MainActor
 final class AuthManager: ObservableObject {
     @Published var userIsAuthenticated: Bool = false
+    @Published var isEmailVerified: Bool = false // ✅ Track verification
     @Published var userID: String?
     @Published var userEmail: String?
     
     private var authStateDidChangeListenerHandle: AuthStateDidChangeListenerHandle?
-    
-    // ✅ Direct reference to AppState instead of fishing through AppDelegate
     private weak var appState: AppState?
     
     init(appState: AppState? = nil) {
@@ -25,40 +24,68 @@ final class AuthManager: ObservableObject {
             
             Task { @MainActor in
                 if let user = user {
-                    // User is signed in
                     self.userID = user.uid
                     self.userEmail = user.email
                     self.userIsAuthenticated = true
+                    self.isEmailVerified = user.isEmailVerified // ✅ Check status
                     
-                    // Load user data into AppState
+                    // Load user data regardless of email verification so UI (Updates) can show tracked shows.
+                    // Verification gating remains for sensitive features, but tracked data should be visible.
                     self.loadUserData(userID: user.uid)
                 } else {
-                    // User is signed out
                     self.userID = nil
                     self.userEmail = nil
                     self.userIsAuthenticated = false
-                    
-                    // Clear app data
+                    self.isEmailVerified = false
                     self.clearUserData()
                 }
             }
         }
     }
     
+    // MARK: - Email/Password Auth
+    
+    func signUp(email: String, pass: String) async throws {
+        let result = try await Auth.auth().createUser(withEmail: email, password: pass)
+        // ✅ Send verification email immediately after sign up
+        try await result.user.sendEmailVerification()
+    }
+
+    func signIn(email: String, pass: String) async throws {
+        try await Auth.auth().signIn(withEmail: email, password: pass)
+        // authStateDidChangeListener will update flags
+    }
+    
+    // ✅ Helper to refresh status (User clicks this after verifying)
+    func checkVerificationStatus() async {
+        guard let user = Auth.auth().currentUser else { return }
+        do {
+            try await user.reload() // Pings Firebase to get fresh status
+            self.isEmailVerified = user.isEmailVerified
+            
+            if self.isEmailVerified {
+                self.loadUserData(userID: user.uid)
+            }
+        } catch {
+            print("Error reloading user: \(error)")
+        }
+    }
+    
+    // ✅ Resend link if they lost it
+    func resendVerificationEmail() async throws {
+        guard let user = Auth.auth().currentUser else { return }
+        try await user.sendEmailVerification()
+    }
+    
     // MARK: - AppState helpers
     
     private func loadUserData(userID: String) {
-        guard let appState = appState else {
-            print("⚠️ AuthManager: appState is not set")
-            return
-        }
-        print("✅ Loading tracked shows for user: \(userID)")
+        guard let appState = appState else { return }
         appState.loadTrackedShows(forUserID: userID)
     }
     
     private func clearUserData() {
         guard let appState = appState else { return }
-        print("🗑️ Clearing user data")
         appState.clearAllData()
     }
     
@@ -68,55 +95,35 @@ final class AuthManager: ObservableObject {
         }
     }
     
-    // MARK: - Sign Out
     func signOut() {
         do {
             try Auth.auth().signOut()
-            print("✅ User signed out")
         } catch let signOutError as NSError {
-            print("❌ Error signing out: \(signOutError)")
+            print("Error signing out: \(signOutError)")
         }
     }
     
-    // MARK: - Sign in with Google
-    
     func signInWithGoogle() async {
-        guard let clientID = FirebaseApp.app()?.options.clientID else {
-            print("❌ No client ID found in Firebase configuration")
-            return
-        }
-        
+        // Google accounts are automatically "verified"
+        guard let clientID = FirebaseApp.app()?.options.clientID else { return }
         let config = GIDConfiguration(clientID: clientID)
         GIDSignIn.sharedInstance.configuration = config
         
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let window = windowScene.windows.first,
-              let rootViewController = window.rootViewController else {
-            print("❌ Could not find root view controller")
-            return
-        }
+              let rootViewController = window.rootViewController else { return }
         
         do {
             let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
             let user = result.user
-            
-            guard let idToken = user.idToken?.tokenString else {
-                throw NSError(
-                    domain: "AuthManager",
-                    code: 0,
-                    userInfo: [NSLocalizedDescriptionKey: "ID Token missing"]
-                )
-            }
-            
+            guard let idToken = user.idToken?.tokenString else { return }
             let credential = GoogleAuthProvider.credential(
                 withIDToken: idToken,
                 accessToken: user.accessToken.tokenString
             )
-            
             _ = try await Auth.auth().signIn(with: credential)
-            print("✅ Google Sign-In successful")
         } catch {
-            print("❌ Google Sign-In Error: \(error.localizedDescription)")
+            print("Google Sign-In Error: \(error.localizedDescription)")
         }
     }
 }

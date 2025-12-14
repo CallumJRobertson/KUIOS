@@ -21,9 +21,35 @@ struct YourUpdateView: View {
                 GeometryReader { geo in
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 32) {
-                            
-                            // MARK: - Centered Slideshow
-                            if !appState.trackedUpdates.isEmpty {
+                            // MARK: - Recently Released (past N days)
+                            if !appState.recentReleases.isEmpty {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    Text("Recently Released")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 24)
+                                    
+                                    let sidePaddingRecent = max(0, (geo.size.width - cardWidth) / 2)
+                                    
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: cardSpacing) {
+                                            ForEach(appState.recentReleases) { show in
+                                                NavigationLink(destination: ShowDetailView(show: show)) {
+                                                    SlideshowCard(show: show, width: cardWidth)
+                                                }
+                                                .buttonStyle(BouncyButtonStyle())
+                                            }
+                                        }
+                                        .scrollTargetLayout()
+                                    }
+                                    .scrollTargetBehavior(.viewAligned)
+                                    .contentMargins(.horizontal, sidePaddingRecent, for: .scrollContent)
+                                }
+                            }
+                             
+                             // MARK: - Centered Slideshow
+                             if !appState.trackedUpdates.isEmpty {
                                 VStack(alignment: .leading, spacing: 16) {
                                     Text("Upcoming")
                                         .font(.title2)
@@ -62,6 +88,56 @@ struct YourUpdateView: View {
                                 .foregroundStyle(.white.opacity(0.7))
                                 .padding(.top, 40)
                             }
+                            
+                            // Debug counts
+                            VStack(spacing: 6) {
+                                Text("Tracked shows: \(appState.trackedShows.count)")
+                                    .foregroundStyle(.white.opacity(0.7))
+                                Text("Upcoming found: \(appState.trackedUpdates.count) | Recent: \(appState.recentReleases.count)")
+                                    .foregroundStyle(.white.opacity(0.6))
+                            }
+                            .font(.caption)
+                            .padding(.top, 6)
+                            
+                            // If user has tracked shows, show a quick list to help diagnose
+                            if !appState.trackedShows.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Your tracked shows:")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white)
+                                        .padding(.top, 8)
+                                    
+                                    ForEach(appState.trackedShows.prefix(10)) { s in
+                                        HStack {
+                                            Text(s.title)
+                                                .foregroundStyle(.white)
+                                                .lineLimit(1)
+                                            Spacer()
+                                            if let date = s.nextAirDate {
+                                                Text(DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .none))
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.white.opacity(0.7))
+                                            } else if let ai = s.aiSummary {
+                                                Text(ai)
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.white.opacity(0.6))
+                                                    .lineLimit(1)
+                                            } else {
+                                                Text("No schedule")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.white.opacity(0.5))
+                                            }
+                                        }
+                                    }
+                                    
+                                    if appState.trackedShows.count > 10 {
+                                        Text("+\(appState.trackedShows.count - 10) more")
+                                            .font(.caption2)
+                                            .foregroundStyle(.white.opacity(0.6))
+                                    }
+                                }
+                                .padding(.top, 8)
+                            }
                         }
                         .padding(.top, 20)
                         .padding(.bottom, 100)
@@ -71,11 +147,17 @@ struct YourUpdateView: View {
             .navigationTitle("Updates")
             .toolbarColorScheme(.dark, for: .navigationBar)
             .refreshable {
+                let window = UserDefaults.standard.integer(forKey: "recentWindowDays")
                 await appState.loadUpdates()
+                await appState.loadRecentReleases(windowDays: window == 0 ? 7 : window)
             }
         }
         .onAppear {
-            Task { await appState.loadUpdates() }
+            Task {
+                let window = UserDefaults.standard.integer(forKey: "recentWindowDays")
+                await appState.loadUpdates()
+                await appState.loadRecentReleases(windowDays: window == 0 ? 7 : window)
+            }
         }
     }
 }

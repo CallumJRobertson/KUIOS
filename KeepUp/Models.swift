@@ -152,6 +152,7 @@ struct TMDBTVDetail: Decodable {
     let createdBy: [TMDBCreator]?
     let status: String?
     let nextEpisodeToAir: TMDBEpisode?
+    let lastEpisodeToAir: TMDBEpisode?
     
     enum CodingKeys: String, CodingKey {
         case id, name, overview, genres, credits, status
@@ -162,6 +163,7 @@ struct TMDBTVDetail: Decodable {
         case backdropPath = "backdrop_path"
         case createdBy = "created_by"
         case nextEpisodeToAir = "next_episode_to_air"
+        case lastEpisodeToAir = "last_episode_to_air"
     }
 }
 
