@@ -80,63 +80,24 @@ struct YourUpdateView: View {
                                     .scaleEffect(1.5)
                                     .padding(.top, 50)
                             } else {
-                                ContentUnavailableView {
-                                    Label("No scheduled airings", systemImage: "calendar.badge.exclamationmark")
-                                } description: {
-                                    Text("We couldn't find confirmed air dates for your shows.")
-                                }
-                                .foregroundStyle(.white.opacity(0.7))
-                                .padding(.top, 40)
-                            }
-                            
-                            // Debug counts
-                            VStack(spacing: 6) {
-                                Text("Tracked shows: \(appState.trackedShows.count)")
+                                VStack(spacing: 16) {
+                                    ContentUnavailableView {
+                                        Label("No scheduled airings", systemImage: "calendar.badge.exclamationmark")
+                                    } description: {
+                                        Text("Track a show to see upcoming episodes here.")
+                                    }
                                     .foregroundStyle(.white.opacity(0.7))
-                                Text("Upcoming found: \(appState.trackedUpdates.count) | Recent: \(appState.recentReleases.count)")
-                                    .foregroundStyle(.white.opacity(0.6))
-                            }
-                            .font(.caption)
-                            .padding(.top, 6)
-                            
-                            // If user has tracked shows, show a quick list to help diagnose
-                            if !appState.trackedShows.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Your tracked shows:")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.white)
-                                        .padding(.top, 8)
-                                    
-                                    ForEach(appState.trackedShows.prefix(10)) { s in
-                                        HStack {
-                                            Text(s.title)
-                                                .foregroundStyle(.white)
-                                                .lineLimit(1)
-                                            Spacer()
-                                            if let date = s.nextAirDate {
-                                                Text(DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .none))
-                                                    .font(.caption2)
-                                                    .foregroundStyle(.white.opacity(0.7))
-                                            } else if let ai = s.aiSummary {
-                                                Text(ai)
-                                                    .font(.caption2)
-                                                    .foregroundStyle(.white.opacity(0.6))
-                                                    .lineLimit(1)
-                                            } else {
-                                                Text("No schedule")
-                                                    .font(.caption2)
-                                                    .foregroundStyle(.white.opacity(0.5))
-                                            }
-                                        }
+
+                                    NavigationLink(destination: SearchShowsView()) {
+                                        Label("Find shows to track", systemImage: "plus")
+                                            .frame(maxWidth: .infinity)
                                     }
-                                    
-                                    if appState.trackedShows.count > 10 {
-                                        Text("+\(appState.trackedShows.count - 10) more")
-                                            .font(.caption2)
-                                            .foregroundStyle(.white.opacity(0.6))
-                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.cyan)
+                                    .controlSize(.large)
+                                    .padding(.horizontal, 40)
                                 }
-                                .padding(.top, 8)
+                                .padding(.top, 40)
                             }
                         }
                         .padding(.top, 20)
