@@ -16,7 +16,9 @@ struct ShowDetailView: View {
         self.show = show
         _detailedShow = State(initialValue: show)
     }
-    
+
+    private var tmdbClient: TMDBClient { appState.tmdbClient }
+
     // Custom Glass Material Background
     private var glassBackground: some View {
         RoundedRectangle(cornerRadius: 16)
@@ -254,20 +256,24 @@ struct ShowDetailView: View {
                                                         image
                                                             .resizable()
                                                             .scaledToFit()
-                                                            .frame(width: 50, height: 50)
-                                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                                            .frame(width: 70, height: 70)
+                                                            .clipShape(RoundedRectangle(cornerRadius: 12))
                                                             .shadow(radius: 2)
                                                     } placeholder: {
-                                                        RoundedRectangle(cornerRadius: 8)
-                                                            .fill(Color.gray.opacity(0.2))
-                                                            .frame(width: 50, height: 50)
+                                                        RoundedRectangle(cornerRadius: 12)
+                                                            .fill(Color.white.opacity(0.08))
+                                                            .frame(width: 70, height: 70)
+                                                            .overlay(
+                                                                ProgressView()
+                                                                    .tint(.white.opacity(0.7))
+                                                            )
                                                     }
                                                 }
                                                 Text(provider.name)
                                                     .font(.caption2)
                                                     .lineLimit(2)
                                                     .multilineTextAlignment(.center)
-                                                    .frame(width: 70)
+                                                    .frame(width: 80)
                                                     .foregroundStyle(.white.opacity(0.8))
                                             }
                                         }
@@ -335,17 +341,31 @@ struct ShowDetailView: View {
         if let cached = appState.getCachedShow(id: show.id) {
             detailedShow = cached
         }
-        if !detailedShow.hasDetails { await loadDetails() }
-        if detailedShow.trailerKey == nil { await loadTrailer() }
-        if detailedShow.watchProviders == nil { await loadWatchProviders() }
-        if detailedShow.aiSummary == nil { await loadStatus() }
+
+        let sharedClient = tmdbClient
+        await withTaskGroup(of: Void.self) { group in
+            if !detailedShow.hasDetails {
+                group.addTask { await loadDetails(using: sharedClient) }
+            }
+
+            if detailedShow.trailerKey == nil {
+                group.addTask { await loadTrailer(using: sharedClient) }
+            }
+
+            if detailedShow.watchProviders == nil {
+                group.addTask { await loadWatchProviders(using: sharedClient) }
+            }
+
+            if detailedShow.aiSummary == nil {
+                group.addTask { await loadStatus() }
+            }
+        }
     }
-    
-    func loadDetails() async {
+
+    func loadDetails(using client: TMDBClient) async {
         isLoadingDetails = true
         defer { isLoadingDetails = false }
         do {
-            let client = TMDBClient(apiKey: Secrets.tmdbAPIKey)
             let detailed = try await client.fetchDetails(for: show.id, type: show.type)
             var updated = detailed
             updated.aiStatus = detailedShow.aiStatus
@@ -357,17 +377,15 @@ struct ShowDetailView: View {
         } catch { print("Failed to load details: \(error)") }
     }
     
-    func loadTrailer() async {
+    func loadTrailer(using client: TMDBClient) async {
         do {
-            let client = TMDBClient(apiKey: Secrets.tmdbAPIKey)
             let trailerKey = try await client.fetchTrailer(for: show.id, type: show.type)
             detailedShow.trailerKey = trailerKey
         } catch { print("Failed to load trailer: \(error)") }
     }
-    
-    func loadWatchProviders() async {
+
+    func loadWatchProviders(using client: TMDBClient) async {
         do {
-            let client = TMDBClient(apiKey: Secrets.tmdbAPIKey)
             let providers = try await client.fetchWatchProviders(for: show.id, type: show.type)
             detailedShow.watchProviders = providers
         } catch { print("Failed to load watch providers: \(error)") }
