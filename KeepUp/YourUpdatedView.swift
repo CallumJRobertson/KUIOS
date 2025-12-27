@@ -72,9 +72,6 @@ struct YourUpdateView: View {
             selectedFeed = HomeFeed(rawValue: defaultHomeFeed) ?? .recent
             Task { await reloadData() }
         }
-        .onChange(of: selectedFeed) { _, _ in
-            Task { await reloadSelectedFeedIfNeeded() }
-        }
     }
     
     private var header: some View {
@@ -184,18 +181,6 @@ struct YourUpdateView: View {
         let window = UserDefaults.standard.integer(forKey: "recentWindowDays")
         await appState.loadRecentReleases(windowDays: window == 0 ? 7 : window)
         await appState.loadUpdates()
-    }
-
-    private func reloadSelectedFeedIfNeeded() async {
-        switch selectedFeed {
-        case .recent:
-            guard appState.recentReleases.isEmpty, !appState.isLoadingRecentReleases else { return }
-            let window = UserDefaults.standard.integer(forKey: "recentWindowDays")
-            await appState.loadRecentReleases(windowDays: window == 0 ? 7 : window)
-        case .upcoming:
-            guard appState.trackedUpdates.isEmpty, !appState.isLoadingUpdates else { return }
-            await appState.loadUpdates()
-        }
     }
 }
 
