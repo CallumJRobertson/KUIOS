@@ -228,16 +228,9 @@ final class AppState: ObservableObject {
         print("🔁 Loading upcoming updates for \(trackedShows.count) tracked shows")
         isLoadingUpdates = true
         defer { isLoadingUpdates = false }
-
-        let trackedSeries = trackedShows.filter { $0.type == .series }
-
-        struct UpdateResult {
-            let show: Show?
-            let didFail: Bool
-        }
-
-        await withTaskGroup(of: UpdateResult.self) { group in
-            for show in trackedSeries {
+        
+        await withTaskGroup(of: Show?.self) { group in
+            for show in trackedShows where show.type == .series {
                 group.addTask {
                     do {
                         let detail = try await self.client.fetchNextSeasonDetails(for: show.id)
@@ -247,37 +240,32 @@ final class AppState: ObservableObject {
                             var updatedShow = show
                             let airDate = nextEp.airDate ?? "TBD"
                             updatedShow.aiSummary = "Next Episode: S\(nextEp.seasonNumber ?? 0)E\(nextEp.episodeNumber ?? 0) on \(airDate)"
-                            return UpdateResult(show: updatedShow, didFail: false)
+                            return updatedShow
                         }
                     } catch {
                         print("Failed to load details for \(show.title): \(error)")
-                        return UpdateResult(show: nil, didFail: true)
                     }
-                    return UpdateResult(show: nil, didFail: false)
+                    return nil
                 }
             }
             
             var newUpdates: [Show] = []
-            var failedCount = 0
-            for await result in group {
-                if result.didFail { failedCount += 1 }
-                if let show = result.show {
+            for await updatedShow in group {
+                if let show = updatedShow {
                     newUpdates.append(show)
                 }
             }
             
             print("✅ Found \(newUpdates.count) upcoming shows")
             // Sort by next air date
-            if !newUpdates.isEmpty || failedCount < trackedSeries.count {
-                self.trackedUpdates = newUpdates.sorted {
-                    if let d1 = $0.nextAirDate, let d2 = $1.nextAirDate {
-                        return d1 < d2
-                    }
-                    if $0.nextAirDate != nil { return true }
-                    if $1.nextAirDate != nil { return false }
-                    
-                    return $0.title < $1.title
+            self.trackedUpdates = newUpdates.sorted {
+                if let d1 = $0.nextAirDate, let d2 = $1.nextAirDate {
+                    return d1 < d2
                 }
+                if $0.nextAirDate != nil { return true }
+                if $1.nextAirDate != nil { return false }
+                
+                return $0.title < $1.title
             }
         }
     }
@@ -295,50 +283,37 @@ final class AppState: ObservableObject {
 
         let calendar = Calendar.current
         let today = Date()
-        let trackedSeries = trackedShows.filter { $0.type == .series }
 
-        struct RecentResult {
-            let show: Show?
-            let didFail: Bool
-        }
-        
-        await withTaskGroup(of: RecentResult.self) { group in
-            for show in trackedSeries {
+        await withTaskGroup(of: Show?.self) { group in
+            for show in trackedShows where show.type == .series {
                 group.addTask {
                     do {
                         let detail = try await self.client.fetchNextSeasonDetails(for: show.id)
 
                         // Prefer lastEpisodeToAir; fall back to nextEpisodeToAir if present
                         let ep = detail.lastEpisodeToAir ?? detail.nextEpisodeToAir
-                        guard let episode = ep, let airDateStr = episode.airDate else {
-                            return RecentResult(show: nil, didFail: false)
-                        }
+                        guard let episode = ep, let airDateStr = episode.airDate else { return nil }
 
                         // Parse air date
-                        guard let airDate = self.releaseDateFormatter.date(from: airDateStr) else {
-                            return RecentResult(show: nil, didFail: false)
-                        }
+                        guard let airDate = self.releaseDateFormatter.date(from: airDateStr) else { return nil }
 
                         // daysAgo from airDate to today
                         if let daysAgo = calendar.dateComponents([.day], from: airDate, to: today).day,
                            daysAgo >= 0 && daysAgo <= windowDays {
                             var updated = show
                             updated.aiSummary = "Last Episode: S\(episode.seasonNumber ?? 0)E\(episode.episodeNumber ?? 0) on \(airDateStr)"
-                            return RecentResult(show: updated, didFail: false)
+                            return updated
                         }
                     } catch {
                         print("Failed to fetch TV details for recent release check for \(show.title): \(error)")
-                        return RecentResult(show: nil, didFail: true)
                     }
-                    return RecentResult(show: nil, didFail: false)
+                    return nil
                 }
             }
 
             var found: [Show] = []
-            var failedCount = 0
-            for await result in group {
-                if result.didFail { failedCount += 1 }
-                if let s = result.show { found.append(s) }
+            for await item in group {
+                if let s = item { found.append(s) }
             }
 
             print("✅ Found \(found.count) recent releases within \(windowDays) days")
@@ -352,9 +327,7 @@ final class AppState: ObservableObject {
                 return a.title < b.title
             }
 
-            if !sorted.isEmpty || failedCount < trackedSeries.count {
-                await MainActor.run { self.recentReleases = sorted }
-            }
+            await MainActor.run { self.recentReleases = sorted }
         }
     }
     
