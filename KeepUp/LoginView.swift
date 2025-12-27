@@ -77,7 +77,7 @@ struct LoginView: View {
                         
                         if isLoading {
                             ProgressView()
-                                .tint(.cyan)
+                                .tint(.purple)
                         } else {
                             HStack(spacing: 16) {
                                 Button {

@@ -57,12 +57,16 @@ struct YourUpdateView: View {
                 }
             }
             .navigationTitle("Home")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(destination: SearchShowsView()) {
                         Image(systemName: "magnifyingglass")
                             .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.12), in: Capsule())
                     }
                 }
             }
@@ -72,15 +76,18 @@ struct YourUpdateView: View {
             selectedFeed = HomeFeed(rawValue: defaultHomeFeed) ?? .recent
             Task { await reloadData() }
         }
+        .onChange(of: selectedFeed) { _, _ in
+            Task { await reloadSelectedFeedIfNeeded() }
+        }
     }
     
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Stay on top of your shows")
-                        .foregroundStyle(.white.opacity(0.75))
-                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.78))
+                        .font(.subheadline.weight(.medium))
                 }
                 Spacer()
             }
@@ -89,7 +96,7 @@ struct YourUpdateView: View {
     }
     
     private var segmentedPill: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             ForEach(HomeFeed.allCases) { feed in
                 Button {
                     selectedFeed = feed
@@ -97,27 +104,30 @@ struct YourUpdateView: View {
                 } label: {
                     Text(feed.title)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(selectedFeed == feed ? .white : .white.opacity(0.8))
+                        .foregroundStyle(selectedFeed == feed ? .white : .white.opacity(0.75))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
                         .background(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(selectedFeed == feed ? Color.purple : Color.white.opacity(0.14))
-                                .shadow(color: selectedFeed == feed ? Color.purple.opacity(0.35) : Color.black.opacity(0.2), radius: 8, y: 3)
+                                .fill(selectedFeed == feed ? Color.purple.opacity(0.8) : Color.white.opacity(0.12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(.white.opacity(selectedFeed == feed ? 0.2 : 0.08), lineWidth: 1)
+                                )
                                 .matchedGeometryEffect(id: "feed-pill", in: animation, isSource: selectedFeed == feed)
                         )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedFeed)
     }
     
     private func feedSection(for shows: [Show], in size: CGSize) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(selectedFeed.title)
-                .font(.title2.bold())
-                .foregroundStyle(.white)
+            Text(selectedFeed.title.uppercased())
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.7))
+                .tracking(1.4)
                 .padding(.horizontal, 24)
             
             let sidePadding = max(0, (size.width - cardWidth) / 2)
@@ -142,24 +152,45 @@ struct YourUpdateView: View {
         VStack(spacing: 18) {
             Image(systemName: "sparkles.tv")
                 .font(.system(size: 46, weight: .semibold))
-                .foregroundStyle(.cyan)
+                .foregroundStyle(.purple)
                 .padding(.bottom, 4)
-            Text("No shows yet")
-                .font(.title3.bold())
-                .foregroundStyle(.white)
-            Text("Track a show to see recently released and upcoming episodes here.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.7))
-                .font(.subheadline)
-            NavigationLink(destination: SearchShowsView()) {
-                Text("Track a show")
-                    .font(.headline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
+            if appState.trackedShows.isEmpty {
+                Text("No shows yet")
+                    .font(.title3.bold())
+                    .foregroundStyle(.white)
+                Text("Track a show to see recently released and upcoming episodes here.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.subheadline)
+                NavigationLink(destination: SearchShowsView()) {
+                    Text("Track a show")
+                        .font(.headline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.purple)
+                .controlSize(.large)
+                .padding(.horizontal, 24)
+            } else {
+                Text("No updates yet")
+                    .font(.title3.bold())
+                    .foregroundStyle(.white)
+                Text("We couldn’t load updates right now. Pull to refresh or try again.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.subheadline)
+                Button {
+                    Task { await reloadData() }
+                } label: {
+                    Text("Try again")
+                        .font(.headline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.purple)
+                .controlSize(.large)
+                .padding(.horizontal, 24)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.blue)
-            .controlSize(.large)
-            .padding(.horizontal, 24)
         }
     }
     
@@ -181,6 +212,18 @@ struct YourUpdateView: View {
         let window = UserDefaults.standard.integer(forKey: "recentWindowDays")
         await appState.loadRecentReleases(windowDays: window == 0 ? 7 : window)
         await appState.loadUpdates()
+    }
+
+    private func reloadSelectedFeedIfNeeded() async {
+        switch selectedFeed {
+        case .recent:
+            guard appState.recentReleases.isEmpty, !appState.isLoadingRecentReleases else { return }
+            let window = UserDefaults.standard.integer(forKey: "recentWindowDays")
+            await appState.loadRecentReleases(windowDays: window == 0 ? 7 : window)
+        case .upcoming:
+            guard appState.trackedUpdates.isEmpty, !appState.isLoadingUpdates else { return }
+            await appState.loadUpdates()
+        }
     }
 }
 
@@ -215,15 +258,14 @@ struct SlideshowCard: View {
             .frame(height: 200)
             
             // 3. Text Info
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 if let date = show.nextAirDate {
-                    Text(formatRelativeDate(date).uppercased())
+                    Label(formatRelativeDate(date).uppercased(), systemImage: "calendar")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.yellow)
-                        .clipShape(Capsule())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.purple.opacity(0.8), in: Capsule())
                 }
                 
                 Text(show.title)
@@ -231,7 +273,7 @@ struct SlideshowCard: View {
                     .fontWeight(.black)
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                    .shadow(color: .black, radius: 2)
+                    .shadow(color: .black.opacity(0.7), radius: 4, y: 2)
                 
                 if let summary = show.aiSummary {
                     Text(cleanSummary(summary))
@@ -239,7 +281,7 @@ struct SlideshowCard: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(Color.purple.opacity(0.9))
+                        .background(Color.purple.opacity(0.85))
                         .clipShape(Capsule())
                         .lineLimit(1)
                 }
@@ -291,6 +333,7 @@ struct SlideshowCard: View {
         formatter.dateFormat = "d MMM"
         return formatter.string(from: date)
     }
+    
 }
 
 struct BouncyButtonStyle: ButtonStyle {

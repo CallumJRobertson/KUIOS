@@ -186,7 +186,7 @@ struct ShowDetailView: View {
                             
                             if isLoadingAI {
                                 HStack(spacing: 12) {
-                                    ProgressView().tint(.cyan)
+                                    ProgressView().tint(.purple)
                                     Text("Analyzing show status...")
                                         .font(.subheadline)
                                         .foregroundColor(secondaryTextColor)
