@@ -10,9 +10,9 @@ struct RootView: View {
         appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
         appearance.backgroundColor = UIColor(red: 0.05, green: 0.05, blue: 0.1, alpha: 0.6)
         appearance.shadowColor = UIColor.white.withAlphaComponent(0.08)
-        appearance.selectionIndicatorImage = UIImage.selectionDot(color: .systemPurple)
-        appearance.stackedLayoutAppearance.selected.iconColor = .systemPurple
-        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor.systemPurple]
+        appearance.selectionIndicatorImage = UIImage.selectionDot(color: .systemPink)
+        appearance.stackedLayoutAppearance.selected.iconColor = .systemPink
+        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor.systemPink]
         
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance

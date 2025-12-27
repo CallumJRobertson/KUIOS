@@ -348,7 +348,11 @@ struct SlideshowCard: View {
     }
     
     private var accentColor: Color {
-        Color.purple
+        let palette: [Color] = [
+            Color.red, Color.pink, Color.purple, Color.blue, Color.teal, Color.orange
+        ]
+        let index = abs(show.title.hashValue) % palette.count
+        return palette[index]
     }
 }
 
