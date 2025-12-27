@@ -292,7 +292,7 @@ struct ToggleRow: View {
         Toggle(isOn: $isOn) {
             Text(title).foregroundColor(colorScheme == .light ? .primary : .white)
         }
-        .tint(.cyan)
+        .tint(.purple)
     }
 }
 

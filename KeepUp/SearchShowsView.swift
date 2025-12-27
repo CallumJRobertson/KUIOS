@@ -63,7 +63,7 @@ struct SearchShowsView: View {
                 if isWaitingForResults || appState.isSearching {
                     Spacer()
                     ProgressView()
-                        .tint(.cyan)
+                        .tint(.purple)
                         .scaleEffect(1.5)
                     Spacer()
                 } else if let error = appState.lastSearchError {
