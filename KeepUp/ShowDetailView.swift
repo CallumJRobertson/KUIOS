@@ -3,6 +3,7 @@ import AVKit
 
 struct ShowDetailView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.colorScheme) private var colorScheme
     let show: Show
     
     @State private var detailedShow: Show
@@ -28,13 +29,9 @@ struct ShowDetailView: View {
     
     var body: some View {
         ZStack {
-            // MARK: - 0. Global Deep Background
-            LinearGradient(
-                colors: [Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.1, blue: 0.3)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // MARK: - 0. Global Background (adapts to light/dark)
+            backgroundGradient
+                .ignoresSafeArea()
             
             ScrollView {
                 VStack(spacing: 0) {
@@ -122,7 +119,7 @@ struct ShowDetailView: View {
                             Text(detailedShow.title)
                                 .font(.largeTitle)
                                 .fontWeight(.bold)
-                                .foregroundStyle(.white)
+                                .foregroundColor(primaryTextColor)
                                 .fixedSize(horizontal: false, vertical: true)
                             
                             HStack(spacing: 4) {
@@ -141,7 +138,7 @@ struct ShowDetailView: View {
                                 }
                             }
                             .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundColor(secondaryTextColor)
                         }
                         
                         // 2. TRACKING BUTTON (haptic + subtle pop)
@@ -178,12 +175,12 @@ struct ShowDetailView: View {
                                     .foregroundColor(.cyan)
                                 Text("AI Status")
                                     .font(.headline)
-                                    .foregroundStyle(.white)
+                                    .foregroundColor(primaryTextColor)
                                 
                                 if detailedShow.isCached == true {
                                     Text("(Cached)")
                                         .font(.caption)
-                                        .foregroundColor(.white.opacity(0.6))
+                                        .foregroundColor(secondaryTextColor)
                                 }
                             }
                             
@@ -192,7 +189,7 @@ struct ShowDetailView: View {
                                     ProgressView().tint(.cyan)
                                     Text("Analyzing show status...")
                                         .font(.subheadline)
-                                        .foregroundStyle(.white.opacity(0.8))
+                                        .foregroundColor(secondaryTextColor)
                                 }
                             } else if let error = errorMessage {
                                 Text("Connection failed: \(error)")
@@ -201,21 +198,21 @@ struct ShowDetailView: View {
                             } else if let summary = detailedShow.aiSummary {
                                 Text(summary)
                                     .font(.body)
-                                    .foregroundStyle(.white)
+                                    .foregroundColor(primaryTextColor)
                                 
                                 if let sources = detailedShow.aiSources, !sources.isEmpty {
-                                    Divider().background(.white.opacity(0.2))
+                                    Divider().background(dividerColor)
                                     Text("Sources:")
                                         .font(.caption)
                                         .bold()
-                                        .foregroundColor(.white.opacity(0.6))
+                                        .foregroundColor(secondaryTextColor)
                                     
                                     ForEach(sources.indices, id: \.self) { index in
                                         if let urlString = sources[index].url, let url = URL(string: urlString) {
                                             Link(sources[index].title ?? "Source \(index+1)", destination: url)
                                                 .font(.caption)
                                                 .lineLimit(1)
-                                                .foregroundStyle(.cyan)
+                                                .foregroundColor(.cyan)
                                         }
                                     }
                                 }
@@ -229,10 +226,10 @@ struct ShowDetailView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Overview")
                                     .font(.headline)
-                                    .foregroundStyle(.white)
+                                    .foregroundColor(primaryTextColor)
                                 Text(plot)
                                     .font(.body)
-                                    .foregroundStyle(.white.opacity(0.8))
+                                    .foregroundColor(secondaryTextColor)
                             }
                         }
 
@@ -244,7 +241,7 @@ struct ShowDetailView: View {
                                         .foregroundColor(.cyan)
                                     Text("Where to Watch")
                                         .font(.headline)
-                                        .foregroundStyle(.white)
+                                        .foregroundColor(primaryTextColor)
                                 }
                                 
                                 ScrollView(.horizontal, showsIndicators: false) {
@@ -274,7 +271,7 @@ struct ShowDetailView: View {
                                                     .lineLimit(2)
                                                     .multilineTextAlignment(.center)
                                                     .frame(width: 80)
-                                                    .foregroundStyle(.white.opacity(0.8))
+                                                    .foregroundColor(secondaryTextColor)
                                             }
                                         }
                                     }
@@ -308,7 +305,7 @@ struct ShowDetailView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(colorScheme == .light ? .light : .dark, for: .navigationBar)
         }
         .task {
             await loadAllData()
@@ -428,17 +425,47 @@ struct ShowDetailView: View {
 private struct DetailRow: View {
     let label: String
     let value: String
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         HStack(alignment: .top) {
             Text(label)
                 .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundColor(colorScheme == .light ? .primary : .white.opacity(0.6))
                 .frame(width: 80, alignment: .leading)
             Text(value)
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundColor(colorScheme == .light ? .primary : .white)
             Spacer()
         }
+    }
+}
+
+private extension ShowDetailView {
+    var backgroundGradient: LinearGradient {
+        if colorScheme == .light {
+            return LinearGradient(
+                colors: [Color(.systemGray6), Color(.white)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        return LinearGradient(
+            colors: [Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.1, blue: 0.3)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    var primaryTextColor: Color {
+        colorScheme == .light ? .primary : .white
+    }
+    
+    var secondaryTextColor: Color {
+        colorScheme == .light ? .secondary : Color.white.opacity(0.7)
+    }
+    
+    var dividerColor: Color {
+        colorScheme == .light ? Color.black.opacity(0.06) : Color.white.opacity(0.2)
     }
 }

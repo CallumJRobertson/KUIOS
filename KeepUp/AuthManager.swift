@@ -77,6 +77,32 @@ final class AuthManager: ObservableObject {
         try await user.sendEmailVerification()
     }
     
+    // MARK: - Account management helpers
+    func refreshUser() async throws {
+        guard let user = Auth.auth().currentUser else { return }
+        try await user.reload()
+        userEmail = user.email
+        isEmailVerified = user.isEmailVerified
+    }
+    
+    func updateEmail(to newEmail: String) async throws {
+        guard let user = Auth.auth().currentUser else { return }
+        try await user.updateEmail(to: newEmail)
+        userEmail = newEmail
+    }
+    
+    func updatePassword(to newPassword: String) async throws {
+        guard let user = Auth.auth().currentUser else { return }
+        try await user.updatePassword(to: newPassword)
+    }
+    
+    func deleteAccount() async throws {
+        guard let user = Auth.auth().currentUser else { return }
+        try await user.delete()
+        try? Auth.auth().signOut()
+        clearUserData()
+    }
+    
     // MARK: - AppState helpers
     
     private func loadUserData(userID: String) {
@@ -98,6 +124,7 @@ final class AuthManager: ObservableObject {
     func signOut() {
         do {
             try Auth.auth().signOut()
+            clearUserData()
         } catch let signOutError as NSError {
             print("Error signing out: \(signOutError)")
         }

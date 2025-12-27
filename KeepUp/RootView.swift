@@ -37,6 +37,6 @@ struct RootView: View {
                 }
                 .tag(2)
         }
-        .tint(.cyan) // Modern accent color
+        .tint(.purple)
     }
 }

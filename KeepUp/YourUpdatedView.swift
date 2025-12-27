@@ -2,17 +2,31 @@ import SwiftUI
 
 struct YourUpdateView: View {
     @EnvironmentObject var appState: AppState
+    @AppStorage("defaultHomeFeed") private var defaultHomeFeed: String = "recent"
+    @State private var selectedFeed: HomeFeed = .recent
     
     // Card Dimensions
     let cardWidth: CGFloat = 300
     let cardSpacing: CGFloat = 20
     
+    private enum HomeFeed: String, CaseIterable, Identifiable {
+        case recent, upcoming
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .recent: return "Recently Released"
+            case .upcoming: return "Upcoming"
+            }
+        }
+    }
+    
+    @Namespace private var animation
+    
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background
                 LinearGradient(
-                    colors: [Color(red: 0.05, green: 0.05, blue: 0.1), Color(red: 0.1, green: 0.1, blue: 0.2)],
+                    colors: [Color(red: 0.04, green: 0.05, blue: 0.1), Color(red: 0.08, green: 0.1, blue: 0.18)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -20,106 +34,153 @@ struct YourUpdateView: View {
                 
                 GeometryReader { geo in
                     ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 32) {
-                            // MARK: - Recently Released (past N days)
-                            if !appState.recentReleases.isEmpty {
-                                VStack(alignment: .leading, spacing: 16) {
-                                    Text("Recently Released")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 24)
-                                    
-                                    let sidePaddingRecent = max(0, (geo.size.width - cardWidth) / 2)
-                                    
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: cardSpacing) {
-                                            ForEach(appState.recentReleases) { show in
-                                                NavigationLink(destination: ShowDetailView(show: show)) {
-                                                    SlideshowCard(show: show, width: cardWidth)
-                                                }
-                                                .buttonStyle(BouncyButtonStyle())
-                                            }
-                                        }
-                                        .scrollTargetLayout()
-                                    }
-                                    .scrollTargetBehavior(.viewAligned)
-                                    .contentMargins(.horizontal, sidePaddingRecent, for: .scrollContent)
-                                }
-                            }
-                             
-                             // MARK: - Centered Slideshow
-                             if !appState.trackedUpdates.isEmpty {
-                                VStack(alignment: .leading, spacing: 16) {
-                                    Text("Upcoming")
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 24)
-                                    
-                                    // ✅ FIX: Use max(0, ...) to prevent negative numbers (NaN crash)
-                                    let sidePadding = max(0, (geo.size.width - cardWidth) / 2)
-                                    
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: cardSpacing) {
-                                            ForEach(appState.trackedUpdates) { show in
-                                                NavigationLink(destination: ShowDetailView(show: show)) {
-                                                    SlideshowCard(show: show, width: cardWidth)
-                                                }
-                                                .buttonStyle(BouncyButtonStyle())
-                                            }
-                                        }
-                                        .scrollTargetLayout()
-                                    }
-                                    .scrollTargetBehavior(.viewAligned)
-                                    .contentMargins(.horizontal, sidePadding, for: .scrollContent)
-                                }
-                            } else if appState.isLoadingUpdates {
+                        VStack(spacing: 24) {
+                            header
+                                .padding(.top, 12)
+                                .padding(.horizontal, 20)
+                            
+                            if isLoadingSelectedFeed {
                                 ProgressView()
                                     .tint(.white)
-                                    .scaleEffect(1.5)
-                                    .padding(.top, 50)
+                                    .scaleEffect(1.4)
+                                    .padding(.top, 40)
+                            } else if currentShows.isEmpty {
+                                emptyState
+                                    .frame(minHeight: geo.size.height * 0.5)
+                                    .padding(.horizontal, 24)
                             } else {
-                                VStack(spacing: 16) {
-                                    ContentUnavailableView {
-                                        Label("No scheduled airings", systemImage: "calendar.badge.exclamationmark")
-                                    } description: {
-                                        Text("Track a show to see upcoming episodes here.")
-                                    }
-                                    .foregroundStyle(.white.opacity(0.7))
-
-                                    NavigationLink(destination: SearchShowsView()) {
-                                        Label("Find shows to track", systemImage: "plus")
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(.cyan)
-                                    .controlSize(.large)
-                                    .padding(.horizontal, 40)
-                                }
-                                .padding(.top, 40)
+                                feedSection(for: currentShows, in: geo.size)
                             }
                         }
-                        .padding(.top, 20)
-                        .padding(.bottom, 100)
+                        .padding(.bottom, 90)
                     }
                 }
             }
-            .navigationTitle("Updates")
+            .navigationTitle("Home")
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .refreshable {
-                let window = UserDefaults.standard.integer(forKey: "recentWindowDays")
-                await appState.loadUpdates()
-                await appState.loadRecentReleases(windowDays: window == 0 ? 7 : window)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink(destination: SearchShowsView()) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.white)
+                    }
+                }
             }
+            .refreshable { await reloadData() }
         }
         .onAppear {
-            Task {
-                let window = UserDefaults.standard.integer(forKey: "recentWindowDays")
-                await appState.loadUpdates()
-                await appState.loadRecentReleases(windowDays: window == 0 ? 7 : window)
+            selectedFeed = HomeFeed(rawValue: defaultHomeFeed) ?? .recent
+            Task { await reloadData() }
+        }
+    }
+    
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Stay on top of your shows")
+                        .foregroundStyle(.white.opacity(0.75))
+                        .font(.subheadline)
+                }
+                Spacer()
+            }
+            segmentedPill
+        }
+    }
+    
+    private var segmentedPill: some View {
+        HStack(spacing: 10) {
+            ForEach(HomeFeed.allCases) { feed in
+                Button {
+                    selectedFeed = feed
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                } label: {
+                    Text(feed.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(selectedFeed == feed ? .white : .white.opacity(0.8))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(selectedFeed == feed ? Color.purple : Color.white.opacity(0.14))
+                                .shadow(color: selectedFeed == feed ? Color.purple.opacity(0.35) : Color.black.opacity(0.2), radius: 8, y: 3)
+                                .matchedGeometryEffect(id: "feed-pill", in: animation, isSource: selectedFeed == feed)
+                        )
+                }
+                .buttonStyle(.plain)
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedFeed)
+    }
+    
+    private func feedSection(for shows: [Show], in size: CGSize) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(selectedFeed.title)
+                .font(.title2.bold())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 24)
+            
+            let sidePadding = max(0, (size.width - cardWidth) / 2)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: cardSpacing) {
+                    ForEach(shows) { show in
+                        NavigationLink(destination: ShowDetailView(show: show)) {
+                            SlideshowCard(show: show, width: cardWidth)
+                        }
+                        .buttonStyle(BouncyButtonStyle())
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .contentMargins(.horizontal, sidePadding, for: .scrollContent)
+        }
+    }
+    
+    private var emptyState: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "sparkles.tv")
+                .font(.system(size: 46, weight: .semibold))
+                .foregroundStyle(.cyan)
+                .padding(.bottom, 4)
+            Text("No shows yet")
+                .font(.title3.bold())
+                .foregroundStyle(.white)
+            Text("Track a show to see recently released and upcoming episodes here.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.7))
+                .font(.subheadline)
+            NavigationLink(destination: SearchShowsView()) {
+                Text("Track a show")
+                    .font(.headline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .controlSize(.large)
+            .padding(.horizontal, 24)
+        }
+    }
+    
+    private var currentShows: [Show] {
+        switch selectedFeed {
+        case .recent: return appState.recentReleases
+        case .upcoming: return appState.trackedUpdates
+        }
+    }
+    
+    private var isLoadingSelectedFeed: Bool {
+        switch selectedFeed {
+        case .recent: return appState.isLoadingRecentReleases
+        case .upcoming: return appState.isLoadingUpdates
+        }
+    }
+    
+    private func reloadData() async {
+        let window = UserDefaults.standard.integer(forKey: "recentWindowDays")
+        await appState.loadRecentReleases(windowDays: window == 0 ? 7 : window)
+        await appState.loadUpdates()
     }
 }
 
@@ -155,8 +216,6 @@ struct SlideshowCard: View {
             
             // 3. Text Info
             VStack(alignment: .leading, spacing: 6) {
-                
-                // Smart Date Badge
                 if let date = show.nextAirDate {
                     Text(formatRelativeDate(date).uppercased())
                         .font(.system(size: 11, weight: .bold))
@@ -176,9 +235,12 @@ struct SlideshowCard: View {
                 
                 if let summary = show.aiSummary {
                     Text(cleanSummary(summary))
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.cyan)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.purple.opacity(0.9))
+                        .clipShape(Capsule())
                         .lineLimit(1)
                 }
                 

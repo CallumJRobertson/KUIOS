@@ -96,6 +96,7 @@ final class AppState: ObservableObject {
     // MARK: - Updates Tab
     @Published var trackedUpdates: [Show] = []
     @Published var isLoadingUpdates: Bool = false
+    
     // MARK: - Recent Releases (within configurable window)
     @Published var recentReleases: [Show] = []
     @Published var isLoadingRecentReleases: Bool = false
@@ -104,6 +105,14 @@ final class AppState: ObservableObject {
     private let client: TMDBClient
     var tmdbClient: TMDBClient { client }
     private let firestoreClient = FirestoreClient()
+    
+    // Date formatter for release/air dates (yyyy-MM-dd)
+    private let releaseDateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.timeZone = TimeZone(secondsFromGMT: 0)
+        return df
+    }()
     
     // MARK: - Init
     init(client: TMDBClient = TMDBClient(apiKey: Secrets.tmdbAPIKey)) {
@@ -211,7 +220,7 @@ final class AppState: ObservableObject {
         trackedUpdates.removeAll()
         clearSearchResults()
     }
-    
+
     // MARK: - Updates Tab Logic
     func loadUpdates() async {
         guard !trackedShows.isEmpty else { return }
@@ -220,13 +229,6 @@ final class AppState: ObservableObject {
         isLoadingUpdates = true
         defer { isLoadingUpdates = false }
         
-        let releaseDateFormatter: ISO8601DateFormatter = {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withFullDate]
-            formatter.timeZone = TimeZone(secondsFromGMT: 0)
-            return formatter
-        }()
-
         await withTaskGroup(of: Show?.self) { group in
             for show in trackedShows where show.type == .series {
                 group.addTask {
@@ -293,7 +295,7 @@ final class AppState: ObservableObject {
                         guard let episode = ep, let airDateStr = episode.airDate else { return nil }
 
                         // Parse air date
-                        guard let airDate = releaseDateFormatter.date(from: airDateStr) else { return nil }
+                        guard let airDate = self.releaseDateFormatter.date(from: airDateStr) else { return nil }
 
                         // daysAgo from airDate to today
                         if let daysAgo = calendar.dateComponents([.day], from: airDate, to: today).day,
@@ -317,8 +319,8 @@ final class AppState: ObservableObject {
             print("✅ Found \(found.count) recent releases within \(windowDays) days")
             // Sort by most recent air date (descending)
             let sorted = found.sorted { a, b in
-                let aDate = releaseDateFormatter.date(from: a.aiSummary?.components(separatedBy: " on ").last ?? "")
-                let bDate = releaseDateFormatter.date(from: b.aiSummary?.components(separatedBy: " on ").last ?? "")
+                let aDate = self.releaseDateFormatter.date(from: a.aiSummary?.components(separatedBy: " on ").last ?? "")
+                let bDate = self.releaseDateFormatter.date(from: b.aiSummary?.components(separatedBy: " on ").last ?? "")
                 if let d1 = aDate, let d2 = bDate { return d1 > d2 }
                 if aDate != nil { return true }
                 if bDate != nil { return false }

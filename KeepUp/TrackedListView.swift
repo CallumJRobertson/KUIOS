@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TrackedListView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.colorScheme) private var colorScheme
     @State private var filter: ShowType? = nil // nil = All
     @State private var librarySearchText: String = "" // New: search within library
     
@@ -30,65 +31,87 @@ struct TrackedListView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            ZStack {
-                // Global Deep Background
-                LinearGradient(
-                    colors: [Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.1, blue: 0.3)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+         NavigationStack {
+             ZStack {
+                 // Global background aligned with Home (purple tone)
+                 backgroundGradient
+                     .ignoresSafeArea()
                 
-                VStack(spacing: 0) {
-                    // MARK: - Filter Chips
-                    HStack(spacing: 12) {
-                        FilterChip(title: "All", isSelected: filter == nil) { filter = nil }
-                        FilterChip(title: "TV Shows", isSelected: filter == .series) { filter = .series }
-                        FilterChip(title: "Movies", isSelected: filter == .movie) { filter = .movie }
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 10)
-                    .padding(.bottom, 20)
-                    
-                    // MARK: - Grid Content
-                    if displayedShows.isEmpty {
-                        ContentUnavailableView(
-                            "Library Empty",
-                            systemImage: "square.stack.3d.up.slash",
-                            description: Text("Add shows from Search to build your collection.")
-                        )
-                        .foregroundStyle(.white.opacity(0.7))
-                        Spacer()
-                    } else {
-                        ScrollView {
-                            LazyVGrid(columns: columns, spacing: 20) {
-                                ForEach(displayedShows) { show in
-                                    NavigationLink(destination: ShowDetailView(show: show)) {
-                                        LibraryGridCard(show: show)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.bottom, 80)
-                        }
+                 VStack(spacing: 0) {
+                     // MARK: - Filter Chips
+                     HStack(spacing: 12) {
+                         FilterChip(title: "All", isSelected: filter == nil) { filter = nil }
+                         FilterChip(title: "TV Shows", isSelected: filter == .series) { filter = .series }
+                         FilterChip(title: "Movies", isSelected: filter == .movie) { filter = .movie }
+                         Spacer()
+                     }
+                     .padding(.horizontal)
+                     .padding(.top, 16)
+                     .padding(.bottom, 16)
+                     
+                     // MARK: - Grid Content
+                     if displayedShows.isEmpty {
+                         VStack(spacing: 16) {
+                             Image(systemName: "square.stack.3d.up.slash")
+                                 .font(.system(size: 44, weight: .semibold))
+                                 .foregroundColor(.purple)
+                             Text("Library Empty")
+                                 .font(.title3.bold())
+                                 .foregroundColor(primaryTextColor)
+                             Text("Track a show from Search to see it here.")
+                                 .font(.subheadline)
+                                 .foregroundColor(secondaryTextColor)
+                             NavigationLink(destination: SearchShowsView()) {
+                                 Text("Find shows")
+                                     .font(.headline.weight(.semibold))
+                                     .frame(maxWidth: .infinity)
+                             }
+                             .buttonStyle(.borderedProminent)
+                             .tint(.purple)
+                             .controlSize(.large)
+                             .padding(.horizontal, 24)
+                         }
+                         .padding(.horizontal)
+                         Spacer()
+                     } else {
+                         ScrollView {
+                             LazyVGrid(columns: columns, spacing: 20) {
+                                 ForEach(displayedShows) { show in
+                                     NavigationLink(destination: ShowDetailView(show: show)) {
+                                         LibraryGridCard(show: show)
+                                     }
+                                 }
+                             }
+                             .padding(.horizontal)
+                             .padding(.bottom, 80)
+                         }
+                     }
+                 }
+             }
+             .navigationTitle("Library")
+             .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink(destination: SearchShowsView()) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.white)
                     }
                 }
-            }
-            .navigationTitle("Library")
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            // Enable native searchable UI in the navigation bar for library
-            .searchable(text: $librarySearchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search your library")
-            // Improve keyboard dismissal behavior
-            .onChange(of: librarySearchText) { _ in }
-        }
+             }
+           .toolbarBackground(Color.purple.opacity(0.35), for: .navigationBar)
+           .toolbarColorScheme(.dark, for: .navigationBar)
+           .tint(.purple)
+             // Enable native searchable UI in the navigation bar for library
+             .searchable(text: $librarySearchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search your library")
+             // Improve keyboard dismissal behavior
+             .onChange(of: librarySearchText) { _ in }
+         }
     }
 }
 
 // MARK: - Grid Card
 struct LibraryGridCard: View {
     let show: Show
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -113,14 +136,14 @@ struct LibraryGridCard: View {
                 Text(show.title)
                     .font(.headline)
                     .fontWeight(.bold)
-                    .foregroundStyle(.white)
+                    .foregroundColor(colorScheme == .light ? .primary : .white)
                     .lineLimit(2) // ✅ FIX: Allow 2 lines for long titles
                     .multilineTextAlignment(.leading)
                     .frame(height: 50, alignment: .top) // ✅ FIX: Fixed height prevents jumping
                 
                 Text(show.year)
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundColor(colorScheme == .light ? .secondary : Color.white.opacity(0.6))
             }
         }
     }
@@ -139,6 +162,7 @@ struct FilterChip: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         Button(action: action) {
@@ -147,9 +171,22 @@ struct FilterChip: View {
                 .fontWeight(.medium)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(isSelected ? Color.cyan : Color.white.opacity(0.1))
-                .foregroundStyle(isSelected ? .black : .white)
-                .clipShape(Capsule())
-        }
-    }
-}
+                .background(isSelected ? Color.purple : Color.purple.opacity(0.18))
+                .foregroundColor(.white)
+                 .clipShape(Capsule())
+         }
+      }
+ }
+
+ private extension TrackedListView {
+     var backgroundGradient: LinearGradient {
+         LinearGradient(
+             colors: [Color(red: 0.07, green: 0.05, blue: 0.13), Color(red: 0.12, green: 0.08, blue: 0.2)],
+             startPoint: .top,
+             endPoint: .bottom
+         )
+     }
+    
+     var secondaryTextColor: Color { Color.white.opacity(0.7) }
+     var primaryTextColor: Color { .white }
+ }

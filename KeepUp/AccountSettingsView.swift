@@ -8,66 +8,88 @@ struct AccountSettingsView: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var isDeleting = false
+    @State private var isUpdatingEmail = false
+    @State private var isUpdatingPassword = false
+    @State private var isRefreshing = false
+    @State private var isResending = false
     @State private var showConfirm = false
     @State private var errorMessage: String?
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Account")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                Text(authManager.userEmail ?? "—")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-            
-            Divider()
+    @State private var infoMessage: String?
+    @State private var newEmail: String = ""
+    @State private var newPassword: String = ""
+    @State private var confirmPassword: String = ""
 
-            // Delete Account
-            VStack(spacing: 12) {
-                Text("Delete your account")
-                    .font(.headline)
-                    .foregroundStyle(.red)
-                Text("Deleting your account will remove your authentication and local app data. This action cannot be undone. If you use Firebase auth, you may need to reauthenticate before deletion.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding()
-            
-            Button(role: .destructive) {
-                showConfirm = true
-            } label: {
-                if isDeleting {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                } else {
-                    Text("Delete Account")
-                        .fontWeight(.bold)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.red)
-                        .foregroundStyle(.white)
-                        .cornerRadius(12)
+    var body: some View {
+        Form {
+            Section("Account") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(authManager.userEmail ?? "—")
+                        Label(authManager.isEmailVerified ? "Verified" : "Not Verified", systemImage: authManager.isEmailVerified ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(authManager.isEmailVerified ? .green : .orange)
+                            .font(.caption)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 8) {
+                        Button("Refresh") { Task { await refreshStatus() } }
+                            .disabled(isRefreshing)
+                        Button("Resend Email") { Task { await resendVerification() } }
+                            .disabled(isResending)
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
-            .padding(.horizontal)
-            .disabled(isDeleting)
-            
-            if let error = errorMessage {
-                Text(error)
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
+
+            Section("Change Email") {
+                TextField("New email", text: $newEmail)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                Button {
+                    Task { await updateEmail() }
+                } label: {
+                    if isUpdatingEmail { ProgressView() } else { Text("Update Email") }
+                }
+                .disabled(isUpdatingEmail || newEmail.isEmpty)
             }
 
-            Spacer()
+            Section("Change Password") {
+                SecureField("New password", text: $newPassword)
+                SecureField("Confirm password", text: $confirmPassword)
+                Button {
+                    Task { await updatePassword() }
+                } label: {
+                    if isUpdatingPassword { ProgressView() } else { Text("Update Password") }
+                }
+                .disabled(isUpdatingPassword || newPassword.isEmpty || confirmPassword.isEmpty)
+            }
+
+            Section("Session") {
+                Button("Sign Out", role: .none) {
+                    authManager.signOut()
+                    dismiss()
+                }
+                .foregroundColor(.red)
+            }
+
+            Section("Danger Zone") {
+                Text("Deleting your account removes authentication and local app data. You may need to re-authenticate if Firebase requires a recent login.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Button(role: .destructive) {
+                    showConfirm = true
+                } label: {
+                    if isDeleting { ProgressView() } else { Text("Delete Account") }
+                }
+                .disabled(isDeleting)
+            }
+
+            if let info = infoMessage {
+                Section { Text(info).foregroundColor(.green) }
+            }
+            if let error = errorMessage {
+                Section { Text(error).foregroundColor(.red) }
+            }
         }
-        .padding()
         .navigationTitle("Account Settings")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Are you sure you want to delete your account? This action cannot be undone.", isPresented: $showConfirm, titleVisibility: .visible) {
@@ -77,44 +99,92 @@ struct AccountSettingsView: View {
             Button("Cancel", role: .cancel) {}
         }
     }
-    
-    func performDelete() async {
-        guard let user = Auth.auth().currentUser else {
-            errorMessage = "No authenticated user found."
-            return
-        }
 
-        isDeleting = true
+    func refreshStatus() async {
         errorMessage = nil
-
-        // Attempt to delete Firestore user document first (best-effort)
-        if let uid = user.uid as String? {
-            do {
-                try await Firestore.firestore().collection("users").document(uid).delete()
-            } catch {
-                // Not fatal — log and continue with auth deletion
-                print("Failed to delete Firestore user doc: \(error)")
-            }
-        }
-
+        infoMessage = nil
+        isRefreshing = true
         do {
-            try await user.delete()
-            // Sign out locally and clear app data
-            authManager.signOut()
-            appState.clearAllData()
-            // Dismiss back to Settings
-            dismiss()
+            try await authManager.refreshUser()
+            infoMessage = authManager.isEmailVerified ? "Email verified." : "Verification pending."
         } catch {
-            // If deletion fails due to recent login requirement, surface a helpful message
+            errorMessage = error.localizedDescription
+        }
+        isRefreshing = false
+    }
+
+    func resendVerification() async {
+        errorMessage = nil
+        infoMessage = nil
+        isResending = true
+        do {
+            try await authManager.resendVerificationEmail()
+            infoMessage = "Verification email sent."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isResending = false
+    }
+
+    func updateEmail() async {
+        guard !newEmail.isEmpty else { return }
+        errorMessage = nil
+        infoMessage = nil
+        isUpdatingEmail = true
+        do {
+            try await authManager.updateEmail(to: newEmail)
+            infoMessage = "Email updated."
+            newEmail = ""
+        } catch {
             let ns = error as NSError
-            print("Account deletion error: \(ns)")
             if ns.code == AuthErrorCode.requiresRecentLogin.rawValue {
-                errorMessage = "Please re-authenticate (sign-out/sign-in) and try again."
+                errorMessage = "Please sign out/in, then try updating your email again."
             } else {
                 errorMessage = error.localizedDescription
             }
         }
+        isUpdatingEmail = false
+    }
 
+    func updatePassword() async {
+        guard !newPassword.isEmpty, newPassword == confirmPassword else {
+            errorMessage = "Passwords do not match."
+            return
+        }
+        errorMessage = nil
+        infoMessage = nil
+        isUpdatingPassword = true
+        do {
+            try await authManager.updatePassword(to: newPassword)
+            infoMessage = "Password updated."
+            newPassword = ""
+            confirmPassword = ""
+        } catch {
+            let ns = error as NSError
+            if ns.code == AuthErrorCode.requiresRecentLogin.rawValue {
+                errorMessage = "Please sign out/in, then try updating your password again."
+            } else {
+                errorMessage = error.localizedDescription
+            }
+        }
+        isUpdatingPassword = false
+    }
+
+    func performDelete() async {
+        isDeleting = true
+        errorMessage = nil
+        infoMessage = nil
+        do {
+            try await authManager.deleteAccount()
+            dismiss()
+        } catch {
+            let ns = error as NSError
+            if ns.code == AuthErrorCode.requiresRecentLogin.rawValue {
+                errorMessage = "Please re-authenticate (sign out/in) then delete again."
+            } else {
+                errorMessage = error.localizedDescription
+            }
+        }
         isDeleting = false
     }
 }

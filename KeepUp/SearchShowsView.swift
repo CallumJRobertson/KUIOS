@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SearchShowsView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.colorScheme) private var colorScheme
     @State private var localSearchText = ""
     @State private var selectedType: ShowType = .series
     @FocusState private var isFocused: Bool
@@ -9,24 +10,20 @@ struct SearchShowsView: View {
 
     var body: some View {
         ZStack {
-            // Global Deep Background
-            LinearGradient(
-                colors: [Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.1, blue: 0.3)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Background adapts to light/dark
+            backgroundGradient
+                .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 // MARK: - Glass Search Bar
                 HStack(spacing: 12) {
                     HStack {
                         Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.gray)
+                            .foregroundColor(secondaryTextColor)
                         
                         // ✅ SMOOTH: Auto-search field
                         TextField("Find movies & TV...", text: $localSearchText)
-                            .foregroundStyle(.white)
+                            .foregroundColor(primaryTextColor)
                             .focused($isFocused)
                             .autocorrectionDisabled()
                         
@@ -36,7 +33,7 @@ struct SearchShowsView: View {
                                 appState.clearSearchResults() // Instant clear
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.gray)
+                                    .foregroundColor(secondaryTextColor)
                             }
                         }
                     }
@@ -60,7 +57,7 @@ struct SearchShowsView: View {
                     }
                 }
                 .padding()
-                .background(Color(red: 0.05, green: 0.05, blue: 0.1))
+                .background(colorScheme == .light ? Color(.systemGray6) : Color(red: 0.05, green: 0.05, blue: 0.1))
                 
                 // MARK: - Results Area
                 if isWaitingForResults || appState.isSearching {
@@ -104,7 +101,8 @@ struct SearchShowsView: View {
         }
         .navigationTitle("Search")
         .navigationBarTitleDisplayMode(.inline)
-        // ✅ DEBOUNCE: Trigger search automatically after 500ms of inactivity
+        .toolbarColorScheme(colorScheme == .light ? .light : .dark, for: .navigationBar)
+         // ✅ DEBOUNCE: Trigger search automatically after 500ms of inactivity
         .task(id: localSearchText) {
             if localSearchText.count > 2 {
                 // show waiting UI while debounce timer runs
@@ -147,6 +145,7 @@ struct SearchShowsView: View {
 struct SearchGlassCard: View {
     let show: Show
     let isTracked: Bool
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         HStack(spacing: 16) {
@@ -159,7 +158,7 @@ struct SearchGlassCard: View {
                 Text(show.title)
                     .font(.headline)
                     .fontWeight(.bold)
-                    .foregroundStyle(.white)
+                    .foregroundColor(colorScheme == .light ? .primary : .white)
                     .lineLimit(2)
                 
                 HStack {
@@ -168,7 +167,7 @@ struct SearchGlassCard: View {
                     Text(show.type.displayName)
                 }
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundColor(colorScheme == .light ? .secondary : Color.white.opacity(0.7))
                 
                 Spacer()
                 
@@ -184,14 +183,39 @@ struct SearchGlassCard: View {
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundColor(colorScheme == .light ? .secondary : Color.white.opacity(0.3))
         }
         .padding(12)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(.white.opacity(0.1), lineWidth: 1)
+                .stroke(colorScheme == .light ? Color.black.opacity(0.05) : Color.white.opacity(0.1), lineWidth: 1)
         )
+    }
+}
+
+private extension SearchShowsView {
+    var backgroundGradient: LinearGradient {
+        if colorScheme == .light {
+            return LinearGradient(
+                colors: [Color(.systemGray6), Color(.white)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        return LinearGradient(
+            colors: [Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.1, blue: 0.3)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    var primaryTextColor: Color {
+        colorScheme == .light ? .primary : .white
+    }
+    
+    var secondaryTextColor: Color {
+        colorScheme == .light ? .secondary : Color.white.opacity(0.6)
     }
 }
