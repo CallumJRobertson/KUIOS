@@ -14,10 +14,10 @@ struct LoginView: View {
         ZStack {
             // Background
             LinearGradient(
-                colors: [Color(red: 0.05, green: 0.05, blue: 0.15),
-                         Color(red: 0.1, green: 0.1, blue: 0.3)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+                colors: [Color(red: 0.04, green: 0.05, blue: 0.1),
+                         Color(red: 0.08, green: 0.1, blue: 0.18)],
+                startPoint: .top,
+                endPoint: .bottom
             )
             .ignoresSafeArea()
             
@@ -28,7 +28,7 @@ struct LoginView: View {
                     
                     Image(systemName: "sparkles.tv")
                         .font(.system(size: 80))
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(.purple)
                         .padding(.bottom, 10)
                     
                     Text("Welcome to KeepUp")
@@ -77,7 +77,7 @@ struct LoginView: View {
                         
                         if isLoading {
                             ProgressView()
-                                .tint(.cyan)
+                                .tint(.purple)
                         } else {
                             HStack(spacing: 16) {
                                 Button {
@@ -92,7 +92,7 @@ struct LoginView: View {
                                         .cornerRadius(10)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.cyan, lineWidth: 1)
+                                                .stroke(Color.purple, lineWidth: 1)
                                         )
                                 }
                                 
@@ -103,8 +103,8 @@ struct LoginView: View {
                                         .fontWeight(.bold)
                                         .frame(maxWidth: .infinity)
                                         .padding()
-                                        .background(Color.cyan)
-                                        .foregroundColor(.black)
+                                        .background(Color.purple)
+                                        .foregroundColor(.white)
                                         .cornerRadius(10)
                                 }
                             }

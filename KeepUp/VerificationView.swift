@@ -6,12 +6,18 @@ struct VerificationView: View {
     
     var body: some View {
         ZStack {
-            Color(red: 0.05, green: 0.05, blue: 0.15).ignoresSafeArea()
+            LinearGradient(
+                colors: [Color(red: 0.04, green: 0.05, blue: 0.1),
+                         Color(red: 0.08, green: 0.1, blue: 0.18)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
             
             VStack(spacing: 24) {
                 Image(systemName: "envelope.badge.shield.half.filled")
                     .font(.system(size: 70))
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(.purple)
                 
                 Text("Verify your Email")
                     .font(.title)
@@ -29,8 +35,8 @@ struct VerificationView: View {
                         .fontWeight(.bold)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.cyan)
-                        .foregroundColor(.black)
+                        .background(Color.purple)
+                        .foregroundColor(.white)
                         .cornerRadius(10)
                 }
                 .padding(.top, 10)
@@ -46,7 +52,7 @@ struct VerificationView: View {
                     }
                 }
                 .font(.callout)
-                .foregroundStyle(.cyan)
+                .foregroundStyle(.purple)
                 
                 if !message.isEmpty {
                     Text(message)

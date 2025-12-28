@@ -3,7 +3,6 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var authManager: AuthManager
-    @Environment(\.colorScheme) private var colorScheme
     
     @AppStorage("appTheme") private var appTheme: String = "system"
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
@@ -91,7 +90,7 @@ struct SettingsView: View {
                         
                         // MARK: - SECTION: LIBRARY & TRACKING
                         SettingsSection(title: "Library & Tracking") {
-                            ToggleRow(title: "Include Movies in Updates", isOn: $includeMoviesInUpdates)
+                            ToggleRow(title: "Include Movies on Home", isOn: $includeMoviesInUpdates)
                             Divider().background(dividerColor)
                             ToggleRow(title: "Haptic Feedback", isOn: $hapticsEnabled)
                             Divider().background(dividerColor)
@@ -123,8 +122,8 @@ struct SettingsView: View {
                             }
                         }
                         
-                        // MARK: - SECTION: UPDATES
-                        SettingsSection(title: "Updates") {
+                        // MARK: - SECTION: HOME
+                        SettingsSection(title: "Home") {
                             // Configure the recent releases window (in days)
                             HStack {
                                 Text("Recent release window")
@@ -174,7 +173,10 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .toolbarColorScheme(colorScheme == .light ? .light : .dark, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .tint(.purple)
         }
     }
 }
@@ -221,7 +223,7 @@ struct BugReportView: View {
                         }
                     }
                     .disabled(title.isEmpty || description.isEmpty || isSubmitting)
-                    .listRowBackground(Color.cyan)
+                    .listRowBackground(Color.purple)
                     .foregroundStyle(.white)
                 }
             }
@@ -250,7 +252,6 @@ struct BugReportView: View {
 struct SettingsSection<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
-    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -274,11 +275,11 @@ struct SettingsSection<Content: View>: View {
     }
     
     private var sectionTitleColor: Color {
-        colorScheme == .light ? .secondary : Color.white.opacity(0.6)
+        Color.white.opacity(0.6)
     }
     
     private var sectionBorderColor: Color {
-        colorScheme == .light ? Color.black.opacity(0.05) : Color.white.opacity(0.1)
+        Color.white.opacity(0.1)
     }
 }
 
@@ -286,13 +287,12 @@ struct SettingsSection<Content: View>: View {
 struct ToggleRow: View {
     let title: String
     @Binding var isOn: Bool
-    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         Toggle(isOn: $isOn) {
-            Text(title).foregroundColor(colorScheme == .light ? .primary : .white)
+            Text(title).foregroundColor(.white)
         }
-        .tint(.cyan)
+        .tint(.purple)
     }
 }
 
@@ -300,42 +300,34 @@ struct ToggleRow: View {
 struct InfoRow: View {
     let label: String
     let value: String
-    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         HStack {
-            Text(label).foregroundColor(colorScheme == .light ? .primary : .white)
+            Text(label).foregroundColor(.white)
             Spacer()
-            Text(value).foregroundColor(colorScheme == .light ? .secondary : Color.white.opacity(0.6))
+            Text(value).foregroundColor(Color.white.opacity(0.6))
         }
     }
 }
 
 private extension SettingsView {
     var backgroundGradient: LinearGradient {
-        if colorScheme == .light {
-            return LinearGradient(
-                colors: [Color(.systemGray6), Color(.white)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
         return LinearGradient(
-            colors: [Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.1, blue: 0.3)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
+            colors: [Color(red: 0.04, green: 0.05, blue: 0.1), Color(red: 0.08, green: 0.1, blue: 0.18)],
+            startPoint: .top,
+            endPoint: .bottom
         )
     }
     
     var primaryTextColor: Color {
-        colorScheme == .light ? .primary : .white
+        .white
     }
     
     var secondaryTextColor: Color {
-        colorScheme == .light ? .secondary : Color.white.opacity(0.6)
+        Color.white.opacity(0.6)
     }
     
     var dividerColor: Color {
-        colorScheme == .light ? Color.black.opacity(0.05) : Color.white.opacity(0.2)
+        Color.white.opacity(0.2)
     }
 }

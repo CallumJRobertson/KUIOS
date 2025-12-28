@@ -4,7 +4,7 @@ struct TMDBLogoView: View {
     var body: some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 4)
-                .fill(Color.cyan)
+                .fill(Color.purple)
                 .frame(width: 18, height: 18)
                 .overlay(
                     Text("TM")
