@@ -97,7 +97,8 @@ struct TrackedListView: View {
                     }
                 }
              }
-           .toolbarBackground(Color.purple.opacity(0.35), for: .navigationBar)
+           .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+           .toolbarBackground(.visible, for: .navigationBar)
            .toolbarColorScheme(.dark, for: .navigationBar)
            .tint(.purple)
              // Enable native searchable UI in the navigation bar for library
@@ -179,13 +180,13 @@ struct FilterChip: View {
  }
 
  private extension TrackedListView {
-     var backgroundGradient: LinearGradient {
-         LinearGradient(
-             colors: [Color(red: 0.07, green: 0.05, blue: 0.13), Color(red: 0.12, green: 0.08, blue: 0.2)],
-             startPoint: .top,
-             endPoint: .bottom
-         )
-     }
+    var backgroundGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(red: 0.04, green: 0.05, blue: 0.1), Color(red: 0.08, green: 0.1, blue: 0.18)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
     
      var secondaryTextColor: Color { Color.white.opacity(0.7) }
      var primaryTextColor: Color { .white }

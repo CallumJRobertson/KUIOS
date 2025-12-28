@@ -3,7 +3,6 @@ import AVKit
 
 struct ShowDetailView: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.colorScheme) private var colorScheme
     let show: Show
     
     @State private var detailedShow: Show
@@ -79,7 +78,7 @@ struct ShowDetailView: View {
                             } label: {
                                 Image(systemName: (detailedShow.isNotificationEnabled ?? false) ? "bell.fill" : "bell")
                                     .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.yellow)
+                                    .foregroundColor(.purple)
                                     .padding(8)
                                     .background(.ultraThinMaterial.opacity(0.8))
                                     .clipShape(Circle())
@@ -162,8 +161,8 @@ struct ShowDetailView: View {
                             .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(appState.isTracked(detailedShow) ? Color.white.opacity(0.15) : Color.cyan)
-                            .foregroundColor(appState.isTracked(detailedShow) ? .white : .black)
+                            .background(appState.isTracked(detailedShow) ? Color.white.opacity(0.15) : Color.purple)
+                            .foregroundColor(.white)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .scaleEffect(trackScale)
                         }
@@ -172,7 +171,7 @@ struct ShowDetailView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "brain.head.profile")
-                                    .foregroundColor(.cyan)
+                                    .foregroundColor(.purple)
                                 Text("AI Status")
                                     .font(.headline)
                                     .foregroundColor(primaryTextColor)
@@ -186,7 +185,7 @@ struct ShowDetailView: View {
                             
                             if isLoadingAI {
                                 HStack(spacing: 12) {
-                                    ProgressView().tint(.cyan)
+                                    ProgressView().tint(.purple)
                                     Text("Analyzing show status...")
                                         .font(.subheadline)
                                         .foregroundColor(secondaryTextColor)
@@ -212,7 +211,7 @@ struct ShowDetailView: View {
                                             Link(sources[index].title ?? "Source \(index+1)", destination: url)
                                                 .font(.caption)
                                                 .lineLimit(1)
-                                                .foregroundColor(.cyan)
+                                                .foregroundColor(.purple)
                                         }
                                     }
                                 }
@@ -238,7 +237,7 @@ struct ShowDetailView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack {
                                     Image(systemName: "tv")
-                                        .foregroundColor(.cyan)
+                                        .foregroundColor(.purple)
                                     Text("Where to Watch")
                                         .font(.headline)
                                         .foregroundColor(primaryTextColor)
@@ -305,7 +304,10 @@ struct ShowDetailView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(colorScheme == .light ? .light : .dark, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .tint(.purple)
         }
         .task {
             await loadAllData()
@@ -425,17 +427,16 @@ struct ShowDetailView: View {
 private struct DetailRow: View {
     let label: String
     let value: String
-    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         HStack(alignment: .top) {
             Text(label)
                 .font(.subheadline)
-                .foregroundColor(colorScheme == .light ? .primary : .white.opacity(0.6))
+                .foregroundColor(Color.white.opacity(0.6))
                 .frame(width: 80, alignment: .leading)
             Text(value)
                 .font(.subheadline)
-                .foregroundColor(colorScheme == .light ? .primary : .white)
+                .foregroundColor(.white)
             Spacer()
         }
     }
@@ -443,29 +444,22 @@ private struct DetailRow: View {
 
 private extension ShowDetailView {
     var backgroundGradient: LinearGradient {
-        if colorScheme == .light {
-            return LinearGradient(
-                colors: [Color(.systemGray6), Color(.white)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
         return LinearGradient(
-            colors: [Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.1, blue: 0.3)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
+            colors: [Color(red: 0.04, green: 0.05, blue: 0.1), Color(red: 0.08, green: 0.1, blue: 0.18)],
+            startPoint: .top,
+            endPoint: .bottom
         )
     }
     
     var primaryTextColor: Color {
-        colorScheme == .light ? .primary : .white
+        .white
     }
     
     var secondaryTextColor: Color {
-        colorScheme == .light ? .secondary : Color.white.opacity(0.7)
+        Color.white.opacity(0.7)
     }
     
     var dividerColor: Color {
-        colorScheme == .light ? Color.black.opacity(0.06) : Color.white.opacity(0.2)
+        Color.white.opacity(0.2)
     }
 }

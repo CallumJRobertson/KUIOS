@@ -62,6 +62,8 @@ struct YourUpdateView: View {
             .navigationTitle("Home")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(destination: SearchShowsView()) {
@@ -77,6 +79,7 @@ struct YourUpdateView: View {
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: selectedFeed)
             .refreshable { await reloadData() }
         }
+        .tint(.purple)
         .onAppear {
             selectedFeed = HomeFeed(rawValue: defaultHomeFeed) ?? .recent
             Task { await reloadData() }
@@ -173,7 +176,7 @@ struct YourUpdateView: View {
         VStack(spacing: 18) {
             Image(systemName: "sparkles.tv")
                 .font(.system(size: 46, weight: .semibold))
-                .foregroundStyle(.cyan)
+                .foregroundStyle(.purple)
                 .padding(.bottom, 4)
             Text("No shows yet")
                 .font(.title3.bold())
@@ -188,7 +191,7 @@ struct YourUpdateView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.blue)
+            .tint(.purple)
             .controlSize(.large)
             .padding(.horizontal, 24)
         }
