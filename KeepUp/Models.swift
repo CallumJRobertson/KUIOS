@@ -72,6 +72,15 @@ struct Show: Identifiable, Codable, Equatable {
     }
 }
 
+// MARK: - Reviews
+
+struct ReviewSummary: Equatable {
+    let averageRating: Double
+    let totalReviews: Int
+
+    static let empty = ReviewSummary(averageRating: 0, totalReviews: 0)
+}
+
 // MARK: - Watch Provider
 
 struct WatchProvider: Codable, Identifiable, Equatable {

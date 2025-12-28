@@ -11,6 +11,9 @@ struct ShowDetailView: View {
     @State private var errorMessage: String?
     @State private var providersVisible: Bool = false
     @State private var trackScale: CGFloat = 1.0
+    @State private var reviewSummary: ReviewSummary = .empty
+    @State private var isLoadingReviews = false
+    @State private var isReviewSheetPresented = false
     
     init(show: Show) {
         self.show = show
@@ -299,6 +302,69 @@ struct ShowDetailView: View {
                             .padding()
                             .background(glassBackground)
                         }
+
+                        // 7. REVIEWS (Glass Section)
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "star.bubble")
+                                    .foregroundColor(.purple)
+                                Text("Reviews")
+                                    .font(.headline)
+                                    .foregroundColor(primaryTextColor)
+                            }
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 6) {
+                                    Text("Current rating:")
+                                        .font(.subheadline)
+                                        .foregroundColor(secondaryTextColor)
+                                    Text(detailedShow.rating ?? "Not available")
+                                        .font(.subheadline)
+                                        .foregroundColor(primaryTextColor)
+                                }
+
+                                if isLoadingReviews {
+                                    HStack(spacing: 8) {
+                                        ProgressView()
+                                            .tint(.purple)
+                                        Text("Loading community rating...")
+                                            .font(.subheadline)
+                                            .foregroundColor(secondaryTextColor)
+                                    }
+                                } else if reviewSummary.totalReviews > 0 {
+                                    HStack(spacing: 8) {
+                                        StarRatingView(rating: reviewSummary.averageRating, maxRating: 5)
+                                        Text(String(format: "%.1f", reviewSummary.averageRating))
+                                            .font(.subheadline)
+                                            .foregroundColor(primaryTextColor)
+                                        Text("(\(reviewSummary.totalReviews))")
+                                            .font(.subheadline)
+                                            .foregroundColor(secondaryTextColor)
+                                    }
+                                } else {
+                                    Text("No reviews yet.")
+                                        .font(.subheadline)
+                                        .foregroundColor(secondaryTextColor)
+                                }
+                            }
+
+                            Button {
+                                isReviewSheetPresented = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "square.and.pencil")
+                                    Text("Write a review")
+                                }
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(Color.white.opacity(0.12))
+                                .foregroundColor(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            }
+                        }
+                        .padding()
+                        .background(glassBackground)
                     }
                     .padding()
                 }
@@ -311,6 +377,14 @@ struct ShowDetailView: View {
         }
         .task {
             await loadAllData()
+            await loadReviewSummary()
+        }
+        .sheet(isPresented: $isReviewSheetPresented) {
+            ReviewComposerSheet(
+                show: detailedShow,
+                reviewSummary: $reviewSummary
+            )
+            .environmentObject(appState)
         }
     }
     
@@ -421,6 +495,13 @@ struct ShowDetailView: View {
         } catch { self.errorMessage = error.localizedDescription }
         isLoadingAI = false
     }
+
+    func loadReviewSummary() async {
+        isLoadingReviews = true
+        let summary = await appState.fetchReviewSummary(for: detailedShow.id)
+        reviewSummary = summary
+        isLoadingReviews = false
+    }
 }
 
 // MARK: - Detail Row (Styled to match new theme)
@@ -438,6 +519,164 @@ private struct DetailRow: View {
                 .font(.subheadline)
                 .foregroundColor(.white)
             Spacer()
+        }
+    }
+}
+
+private struct StarRatingView: View {
+    let rating: Double
+    let maxRating: Int
+
+    private var roundedRating: Double {
+        (rating * 2).rounded() / 2
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(1...maxRating, id: \.self) { index in
+                Image(systemName: starName(for: index))
+                    .foregroundColor(.yellow)
+                    .font(.caption)
+            }
+        }
+    }
+
+    private func starName(for index: Int) -> String {
+        if roundedRating >= Double(index) {
+            return "star.fill"
+        } else if roundedRating + 0.5 >= Double(index) {
+            return "star.leadinghalf.filled"
+        } else {
+            return "star"
+        }
+    }
+}
+
+private struct StarRatingPicker: View {
+    @Binding var rating: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(1...5, id: \.self) { index in
+                Button {
+                    rating = index
+                } label: {
+                    Image(systemName: rating >= index ? "star.fill" : "star")
+                        .foregroundColor(.yellow)
+                        .font(.title3)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Rate \(index) stars")
+            }
+        }
+    }
+}
+
+private struct ReviewComposerSheet: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+    let show: Show
+    @Binding var reviewSummary: ReviewSummary
+
+    @State private var rating: Int = 0
+    @State private var text: String = ""
+    @State private var displayName: String = ""
+    @State private var isSubmitting = false
+    @State private var hasStoredDisplayName = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(show.title)
+                            .font(.headline)
+                        StarRatingPicker(rating: $rating)
+                        Text("Tap a star to rate.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("Your rating")
+                }
+
+                Section {
+                    TextField("Display name", text: $displayName)
+                        .textInputAutocapitalization(.words)
+                    Text("Shown with your review. Stored to your account for future reviews.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } header: {
+                    Text("Display name")
+                } footer: {
+                    if hasStoredDisplayName {
+                        Text("You can update this once and it will apply across devices.")
+                    }
+                }
+
+                Section("Review (optional)") {
+                    TextEditor(text: $text)
+                        .frame(minHeight: 120)
+                        .overlay(
+                            Text("Share what you liked or didn’t...")
+                                .foregroundStyle(.gray.opacity(0.5))
+                                .padding(.top, 8)
+                                .padding(.leading, 4)
+                                .opacity(text.isEmpty ? 1 : 0),
+                            alignment: .topLeading
+                        )
+                }
+
+                Section {
+                    Button {
+                        submit()
+                    } label: {
+                        if isSubmitting {
+                            ProgressView()
+                        } else {
+                            Text("Submit Review")
+                                .fontWeight(.bold)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .disabled(rating == 0 || displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
+                }
+            }
+            .navigationTitle("Write a Review")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+            .task {
+                if let name = await appState.fetchDisplayName() {
+                    displayName = name
+                    hasStoredDisplayName = true
+                }
+            }
+        }
+    }
+
+    private func submit() {
+        isSubmitting = true
+        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task {
+            await appState.saveDisplayName(trimmedName)
+            await appState.submitReview(
+                for: show,
+                rating: rating,
+                text: trimmedText.isEmpty ? nil : trimmedText,
+                displayName: trimmedName
+            )
+            let summary = await appState.fetchReviewSummary(for: show.id)
+            reviewSummary = summary
+            isSubmitting = false
+            dismiss()
         }
     }
 }
