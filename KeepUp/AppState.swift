@@ -156,6 +156,92 @@ final class AppState: ObservableObject {
             print("❌ Failed to report bug: \(error)")
         }
     }
+
+    // MARK: - Reviews
+    func submitReview(for show: Show, rating: Int, text: String?, displayName: String) async {
+        guard let user = Auth.auth().currentUser else { return }
+
+        let reviewData: [String: Any] = [
+            "uid": user.uid,
+            "email": user.email ?? "Anonymous",
+            "display_name": displayName,
+            "rating": rating,
+            "text": text ?? "",
+            "show_id": show.id,
+            "show_title": show.title,
+            "show_type": show.type.rawValue,
+            "timestamp": FieldValue.serverTimestamp()
+        ]
+
+        do {
+            try await Firestore.firestore().collection("reviews").addDocument(data: reviewData)
+            print("✅ Review submitted")
+        } catch {
+            print("❌ Failed to submit review: \(error)")
+        }
+    }
+
+    func fetchReviewSummary(for showID: String) async -> ReviewSummary {
+        do {
+            let snapshot = try await Firestore.firestore()
+                .collection("reviews")
+                .whereField("show_id", isEqualTo: showID)
+                .getDocuments()
+
+            let ratings = snapshot.documents.compactMap { $0.data()["rating"] as? Int }
+            guard !ratings.isEmpty else { return .empty }
+
+            let total = ratings.reduce(0, +)
+            let average = Double(total) / Double(ratings.count)
+            return ReviewSummary(averageRating: average, totalReviews: ratings.count)
+        } catch {
+            print("❌ Failed to load review summary: \(error)")
+            return .empty
+        }
+    }
+
+    func fetchDisplayName() async -> String? {
+        guard let user = Auth.auth().currentUser else { return nil }
+
+        if let name = user.displayName, !name.isEmpty {
+            return name
+        }
+
+        do {
+            let document = try await Firestore.firestore().collection("users").document(user.uid).getDocument()
+            if let name = document.data()?["display_name"] as? String, !name.isEmpty {
+                return name
+            }
+        } catch {
+            print("❌ Failed to load display name: \(error)")
+        }
+
+        return nil
+    }
+
+    func saveDisplayName(_ name: String) async {
+        guard let user = Auth.auth().currentUser else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let request = user.createProfileChangeRequest()
+        request.displayName = trimmed
+
+        do {
+            try await request.commitChanges()
+        } catch {
+            print("❌ Failed to update display name in auth: \(error)")
+        }
+
+        do {
+            try await Firestore.firestore()
+                .collection("users")
+                .document(user.uid)
+                .setData(["display_name": trimmed], merge: true)
+        } catch {
+            print("❌ Failed to save display name in Firestore: \(error)")
+        }
+    }
     
     // MARK: - Search Logic
     func performSearch() async {
